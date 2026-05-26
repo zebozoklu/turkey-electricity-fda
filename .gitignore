@@ -49,6 +49,9 @@ po/*~
 rsconnect/
 .positai
 
+#Scripts
+scripts/
+
 # Project data
 data/raw/
 data/processed/
