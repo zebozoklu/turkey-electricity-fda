@@ -47,3 +47,19 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+.positai
+
+# Project data
+data/raw/
+data/processed/
+
+# Generated outputs
+output/figs/
+output/tables/
+
+# R objects
+*.rds
+*.RDS
+
+# Mac
+.DS_Store
