@@ -1,0 +1,257 @@
+\documentclass[10pt]{article}
+
+% Pure LaTeX: no extra packages required.
+\setlength{\textwidth}{7.25in}
+\setlength{\textheight}{9.75in}
+\setlength{\oddsidemargin}{-0.35in}
+\setlength{\evensidemargin}{-0.35in}
+\setlength{\topmargin}{-0.65in}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2pt}
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+\setlength{\arraycolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+
+\begin{document}
+\fontsize{9.2}{10.8}\selectfont
+
+\begin{center}
+{\Large Functional Forecasting of Turkish Electricity Load Curves - Preliminary Report}\\
+\vspace{0.5em}
+{\normalsize Zeynep Bozoklu}
+\end{center}
+
+\vspace{-0.5em}
+
+\section*{Object and functional representation}
+
+Let \(Y_d(h)\) denote Turkish electricity load on day \(d\), hour \(h=0,\ldots,23\).  
+The empirical object is the daily load curve
+\[
+Y_d=\{Y_d(h):h=0,\ldots,23\}.
+\]
+
+The cleaned data are stored as daily curve matrices
+\[
+Y=[Y_d(h)]_{d,h}, \qquad
+\widehat Y^{off}=[\widehat Y^{off}_d(h)]_{d,h}, \qquad
+E=[Y_d(h)-\widehat Y^{off}_d(h)]_{d,h},
+\]
+with 24 hourly observations per retained day.
+
+Each curve is represented by a B-spline basis,
+\[
+Y_d(h)\simeq \sum_{m=1}^{M}c_{dm}B_m(h),
+\qquad M=12.
+\]
+
+FPCA gives
+\[
+Y_d(h)=\mu(h)+\sum_{k=1}^{K}\xi_{dk}\phi_k(h)+e_d(h),
+\qquad K=4.
+\]
+
+Let
+\[
+\xi_d=(\xi_{d1},\ldots,\xi_{dK})',
+\qquad
+\Phi(h)=(\phi_1(h),\ldots,\phi_K(h))'.
+\]
+
+Then
+\[
+Y_d(h)=\mu(h)+\Phi(h)'\xi_d+e_d(h),
+\qquad
+\widehat Y_d(h)=\widehat\mu(h)+\widehat{\Phi}(h)'\widehat\xi_d.
+\]
+
+All forecasts are rolling-origin forecasts: for target day \(d\), estimation uses only information dated \(<d\). The evaluation period starts on 2023-01-01 and contains \(26{,}304\) hourly observations.
+
+\section*{Forecasting specifications}
+
+Benchmarks:
+\[
+\widehat Y_d^{SN}(h)=Y_{d-7}(h),
+\qquad
+\widehat Y_d^{OFF}(h).
+\]
+
+Separate weekly score autoregression:
+\[
+\xi_{dk}=\alpha_k+\beta_k\xi_{d-7,k}+u_{dk},
+\qquad k=1,\ldots,K.
+\]
+
+Weekly FPCA VAR:
+\[
+\xi_d=a+A_7\xi_{d-7}+u_d,
+\qquad A_7\in{\cal R}^{K\times K}.
+\]
+
+FPCA VAR(1,7):
+\[
+\xi_d=a+A_1\xi_{d-1}+A_7\xi_{d-7}+u_d,
+\qquad A_1,A_7\in{\cal R}^{K\times K}.
+\]
+
+Augmented score model:
+\[
+\xi_d=a+A_1\xi_{d-1}+A_7\xi_{d-7}+Bz_d+u_d,
+\]
+where \(z_d\) is predetermined at date \(d\).
+
+Final corrected forecast:
+\[
+\widehat Y_d^{final}(h)
+=
+\widehat\mu(h)+\widehat{\Phi}(h)'\widehat\xi_d+\lambda_d\widehat r_d(h).
+\]
+
+\section*{Predictor construction}
+
+The largest predictor vector is
+\[
+z_d=
+\left(
+z_d^{cal'},z_d^{hol'},z_d^{shape'},z_d^{deriv'}
+\right)'.
+\]
+
+Ramp and early-load variables:
+\[
+R^m_{d-1}=Y_{d-1}(9)-Y_{d-1}(6),
+\qquad
+R^m_{d-7}=Y_{d-7}(9)-Y_{d-7}(6),
+\]
+\[
+L^e_{d-1}=\frac{1}{3}\sum_{h\in\{5,6,7\}}Y_{d-1}(h).
+\]
+
+Calendar controls:
+\[
+z_d^{cal}
+=
+\left(
+weekend_d,
+\sin\frac{2\pi doy_d}{365.25},
+\cos\frac{2\pi doy_d}{365.25}
+\right)'.
+\]
+
+Holiday controls include fixed holidays, religious holidays, holiday eve, post-holiday, near-holiday, and bridge-day indicators:
+\[
+Bridge_d=
+1\{dow_d\in\{Mon,Fri\}\}
+1\{d\notin{\cal H}\}
+1\{d-1\in{\cal H}\ {\rm or}\ d+1\in{\cal H}\}.
+\]
+
+Lagged load-shape variables:
+\[
+\bar Y_{d-1}=\frac{1}{24}\sum_{h=0}^{23}Y_{d-1}(h),
+\qquad
+P_{d-1}=\max_hY_{d-1}(h),
+\qquad
+M_{d-1}=\min_hY_{d-1}(h),
+\]
+\[
+G_{d-1}=P_{d-1}-M_{d-1},
+\qquad
+\bar Y_d^{(q)}
+=
+\frac{1}{q}\sum_{j=1}^{q}
+\left(
+\frac{1}{24}\sum_{h=0}^{23}Y_{d-j}(h)
+\right),
+\quad q\in\{7,28\}.
+\]
+
+Derivative features are computed from the smoothed curve,
+\[
+DY_d(h)=\frac{d}{dh}Y_d(h),
+\]
+and summarized by
+\[
+\overline{DY}_{d-1},\quad
+SD(DY_{d-1}),\quad
+\max_hDY_{d-1}(h),\quad
+\min_hDY_{d-1}(h),\quad
+\max_hDY_{d-1}(h)-\min_hDY_{d-1}(h).
+\]
+
+Targeted intraday changes:
+\[
+R^e_{d-1}=Y_{d-1}(7)-Y_{d-1}(5),
+\qquad
+R^{ev}_{d-1}=Y_{d-1}(20)-Y_{d-1}(17),
+\qquad
+R^{end}_{d-1}=Y_{d-1}(23)-Y_{d-1}(20).
+\]
+
+Adaptive correction uses past residuals
+\[
+\widehat e_s(h)=Y_s(h)-\widehat Y_s^{base}(h),
+\qquad s<d,
+\]
+and applies
+\[
+\widehat Y_d^{corr}(h)
+=
+\widehat Y_d^{base}(h)+\lambda_d\widehat r_d(h),
+\]
+where \(\widehat r_d(h)\) is estimated from recent residual patterns and \(\lambda_d\) is selected on a validation window.
+
+\section*{Evaluation}
+
+For model \(m\),
+\[
+e_{dh}^{(m)}=Y_d(h)-\widehat Y_d^{(m)}(h).
+\]
+
+\[
+MAE_m=\frac{1}{N}\sum_{d,h}|e_{dh}^{(m)}|,
+\qquad
+RMSE_m=
+\left[
+\frac{1}{N}\sum_{d,h}(e_{dh}^{(m)})^2
+\right]^{1/2},
+\qquad
+Bias_m=\frac{1}{N}\sum_{d,h}e_{dh}^{(m)}.
+\]
+
+\[
+Gain_m^{MAE}=100\frac{MAE_{OFF}-MAE_m}{MAE_{OFF}},
+\qquad
+Gain_m^{RMSE}=100\frac{RMSE_{OFF}-RMSE_m}{RMSE_{OFF}}.
+\]
+
+\section*{Current results}
+
+\begin{center}
+\fontsize{8.2}{9.5}\selectfont
+\begin{tabular}{p{0.41\textwidth}rrrrr}
+\hline
+Model & MAE & RMSE & Bias & MAE gain & RMSE gain\\
+\hline
+Seasonal naive \(Y_{d-7}\) & 1912.46 & 3129.98 & 39.85 & -57.60\% & -79.85\%\\
+Official forecast & 1213.50 & 1740.30 & 466.87 & 0.00\% & 0.00\%\\
+FPCA VAR(1,7) scores & 1071.13 & 1562.67 & -55.00 & 11.73\% & 10.21\%\\
+FPCA VAR(1,7) + ramp/calendar & 1031.79 & 1493.24 & 112.34 & 14.97\% & 14.20\%\\
+FPCA VAR(1,7) + derivative features & 890.01 & 1286.78 & 91.28 & 26.66\% & 26.06\%\\
+FPCA VAR(1,7) + holiday/load-shape + adaptive correction & 666.49 & 996.22 & 66.46 & 45.08\% & 42.76\%\\
+FPCA VAR(1,7) + holiday/load-shape/derivative + adaptive correction & {\bf 640.10} & {\bf 967.82} & {\bf 103.39} & {\bf 47.25\%} & {\bf 44.39\%}\\
+\hline
+\end{tabular}
+\end{center}
+
+\fontsize{9.2}{10.8}\selectfont
+
+The final model improves on the official forecast by \(47.25\%\) in MAE and \(44.39\%\) in RMSE. Relative to the weekly seasonal naive benchmark,
+\[
+100\frac{1912.46-640.10}{1912.46}=66.53\%.
+\]
+
+
+\end{document}
+
