@@ -24,9 +24,10 @@ MIN_LAG_DAYS <- 28
 DEBUG_N <- Inf
 
 MODEL_NAME_BASE <- "FPCA VAR(1,7) + holiday/load regime"
-MODEL_NAME_CORRECTED <- "FPCA VAR(1,7) + holiday/load regime + adaptive local correction"
+MODEL_NAME_CORRECTED <- "FPCA VAR(1,7) + holiday/load regime + nested adaptive correction"
 
-CORRECTION_SHRINKAGE <- 0.60
+VALIDATION_DAYS <- 365
+LAMBDA_GRID <- seq(0, 1.2, by = 0.1)
 
 # ------------------------------------------------------------
 # Load curves
@@ -259,6 +260,57 @@ clean_coefficients <- function(coef_mat) {
   coef_mat
 }
 
+evaluate_lambda <- function(actual, base, correction, lambda) {
+  err <- as.vector(actual - (base + lambda * correction))
+  mean(abs(err), na.rm = TRUE)
+}
+
+choose_lambda_from_history <- function(
+    X_score, Y_score, X_resid, actual_curves, mu_hat, phi_hat) {
+  
+  n_reg <- nrow(X_score)
+  n_val <- min(VALIDATION_DAYS, floor(0.25 * n_reg))
+  
+  if (n_val < 30 || (n_reg - n_val) < 60) {
+    return(0.6)
+  }
+  
+  train_rows <- seq_len(n_reg - n_val)
+  val_rows <- (n_reg - n_val + 1):n_reg
+  
+  fit_score <- lm.fit(X_score[train_rows, , drop = FALSE], Y_score[train_rows, , drop = FALSE])
+  B_hat <- clean_coefficients(fit_score$coefficients)
+  
+  score_train_fitted <- X_score[train_rows, , drop = FALSE] %*% B_hat
+  fitted_train_curves <- score_train_fitted %*% t(phi_hat)
+  fitted_train_curves <- sweep(fitted_train_curves, 2, mu_hat, "+")
+  
+  residual_train_curves <- actual_curves[train_rows, , drop = FALSE] - fitted_train_curves
+  
+  fit_resid <- lm.fit(
+    X_resid[train_rows, , drop = FALSE],
+    residual_train_curves
+  )
+  G_hat <- clean_coefficients(fit_resid$coefficients)
+  
+  score_val <- X_score[val_rows, , drop = FALSE] %*% B_hat
+  base_val <- score_val %*% t(phi_hat)
+  base_val <- sweep(base_val, 2, mu_hat, "+")
+  
+  correction_val <- X_resid[val_rows, , drop = FALSE] %*% G_hat
+  actual_val <- actual_curves[val_rows, , drop = FALSE]
+  
+  lambda_scores <- tibble(
+    lambda = LAMBDA_GRID,
+    mae = sapply(
+      LAMBDA_GRID,
+      function(lambda) evaluate_lambda(actual_val, base_val, correction_val, lambda)
+    )
+  )
+  
+  lambda_scores$lambda[which.min(lambda_scores$mae)]
+}
+
 feature_indices <- (MIN_LAG_DAYS + 1):n_days
 
 cat("\nPrecomputing load/calendar features...\n")
@@ -343,6 +395,25 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
     colnames(Z_train_raw)
   )
   
+  mu_hat <- as.vector(eval.fd(hours, pca$meanfd))
+  phi_hat <- eval.fd(hours, pca$harmonics)
+
+  actual_train_curves <- Y_train[d_index, , drop = FALSE]
+  
+  X_resid <- cbind(
+    intercept = 1,
+    Z_scaled$Z_train
+  )
+  
+  selected_lambda <- choose_lambda_from_history(
+    X_score = X_score,
+    Y_score = Y_score,
+    X_resid = X_resid,
+    actual_curves = actual_train_curves,
+    mu_hat = mu_hat,
+    phi_hat = phi_hat
+  )
+  
   fit_score <- lm.fit(X_score, Y_score)
   B_hat <- clean_coefficients(fit_score$coefficients)
   
@@ -355,22 +426,13 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
   
   score_hat <- as.vector(x_new %*% B_hat)
   
-  mu_hat <- as.vector(eval.fd(hours, pca$meanfd))
-  phi_hat <- eval.fd(hours, pca$harmonics)
-  
   y_base <- as.vector(mu_hat + phi_hat %*% score_hat)
   
   score_fitted <- X_score %*% B_hat
   fitted_curves <- score_fitted %*% t(phi_hat)
   fitted_curves <- sweep(fitted_curves, 2, mu_hat, "+")
   
-  actual_train_curves <- Y_train[d_index, , drop = FALSE]
   residual_train_curves <- actual_train_curves - fitted_curves
-  
-  X_resid <- cbind(
-    intercept = 1,
-    Z_scaled$Z_train
-  )
   
   x_resid_new <- c(
     1,
@@ -381,13 +443,14 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
   G_hat <- clean_coefficients(fit_resid$coefficients)
   
   correction_hat <- as.vector(x_resid_new %*% G_hat)
-  y_corrected <- y_base + CORRECTION_SHRINKAGE * correction_hat
+  y_corrected <- y_base + selected_lambda * correction_hat
   
   list(
     forecast_base = y_base,
     forecast_corrected = y_corrected,
     score_hat = score_hat,
     correction_hat = correction_hat,
+    selected_lambda = selected_lambda,
     varprop = pca$varprop[1:K],
     z_new_raw = Z_new_raw
   )
@@ -422,6 +485,7 @@ varprops <- matrix(
 )
 
 feature_track <- list()
+selected_lambdas <- rep(NA_real_, length(test_idx))
 
 for (j in seq_along(test_idx)) {
   i <- test_idx[j]
@@ -439,6 +503,7 @@ for (j in seq_along(test_idx)) {
   pred_base[j, ] <- out$forecast_base
   pred_corrected[j, ] <- out$forecast_corrected
   correction_mat[j, ] <- out$correction_hat
+  selected_lambdas[j] <- out$selected_lambda
   score_forecasts[j, ] <- out$score_hat
   varprops[j, ] <- out$varprop
   feature_track[[j]] <- out$z_new_raw
@@ -451,6 +516,11 @@ for (j in seq_along(test_idx)) {
 
 feature_track_df <- bind_rows(feature_track) |>
   mutate(date = dates[test_idx], .before = 1)
+
+lambda_track_df <- tibble(
+  date = dates[test_idx],
+  selected_lambda = selected_lambdas
+)
 
 # ------------------------------------------------------------
 # Benchmarks
@@ -637,6 +707,11 @@ write_csv(
   "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_features_used.csv"
 )
 
+write_csv(
+  lambda_track_df,
+  "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_selected_lambdas.csv"
+)
+
 # ------------------------------------------------------------
 # Plots
 # ------------------------------------------------------------
@@ -716,8 +791,10 @@ forecast_objects <- list(
     TEST_START = TEST_START,
     MIN_TRAIN_DAYS = MIN_TRAIN_DAYS,
     MIN_LAG_DAYS = MIN_LAG_DAYS,
-    CORRECTION_SHRINKAGE = CORRECTION_SHRINKAGE
+    VALIDATION_DAYS = VALIDATION_DAYS,
+    LAMBDA_GRID = LAMBDA_GRID
   ),
+  selected_lambdas = lambda_track_df,
   metrics_overall = metric_table,
   metrics_by_hour = metrics_by_hour,
   metrics_by_month = metrics_by_month,
