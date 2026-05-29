@@ -18,7 +18,6 @@ dir.create("output/results", recursive = TRUE, showWarnings = FALSE)
 K <- 4
 K_DERIV <- 3
 NBASIS <- 12
-NBASIS_DERIV <- 10
 NORDER <- 4
 TEST_START <- as.Date("2023-01-01")
 MIN_TRAIN_DAYS <- 365
@@ -60,7 +59,6 @@ if (has_official) {
 }
 
 n_days <- nrow(Y)
-diff_hours <- hours[-1]
 
 hcol <- function(h) {
   out <- match(h, hours)
@@ -209,9 +207,31 @@ safe_window_ramp <- function(Y_mat, start_idx, end_idx) {
   mean(Y_mat[start_idx:end_idx, H9] - Y_mat[start_idx:end_idx, H6], na.rm = TRUE)
 }
 
+make_fd_object <- function(Y_mat, argvals, nbasis, norder) {
+  basis <- create.bspline.basis(
+    rangeval = range(argvals),
+    nbasis = nbasis,
+    norder = norder
+  )
+  
+  Data2fd(
+    argvals = argvals,
+    y = t(Y_mat),
+    basisobj = basis
+  )
+}
+
 make_derivative_matrix <- function(Y_mat) {
-  out <- Y_mat[, -1, drop = FALSE] - Y_mat[, -ncol(Y_mat), drop = FALSE]
-  colnames(out) <- as.character(diff_hours)
+  fd_obj <- make_fd_object(
+    Y_mat = Y_mat,
+    argvals = hours,
+    nbasis = NBASIS,
+    norder = NORDER
+  )
+  
+  deriv_fd <- deriv.fd(fd_obj, Lfdobj = 1)
+  out <- t(eval.fd(hours, deriv_fd))
+  colnames(out) <- as.character(hours)
   out
 }
 
@@ -385,35 +405,17 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
   dates_train <- dates[1:(i - 1)]
   n_train <- nrow(Y_train)
   
-  basis <- create.bspline.basis(
-    rangeval = range(hours),
+  fd_train <- make_fd_object(
+    Y_mat = Y_train,
+    argvals = hours,
     nbasis = nbasis,
     norder = norder
-  )
-  
-  fd_train <- Data2fd(
-    argvals = hours,
-    y = t(Y_train),
-    basisobj = basis
   )
   
   pca <- pca.fd(fd_train, nharm = K)
   scores <- pca$scores[, 1:K, drop = FALSE]
   
-  D_train <- make_derivative_matrix(Y_train)
-  
-  basis_deriv <- create.bspline.basis(
-    rangeval = range(diff_hours),
-    nbasis = NBASIS_DERIV,
-    norder = norder
-  )
-  
-  fd_deriv <- Data2fd(
-    argvals = diff_hours,
-    y = t(D_train),
-    basisobj = basis_deriv
-  )
-  
+  fd_deriv <- deriv.fd(fd_train, Lfdobj = 1)
   deriv_pca <- pca.fd(fd_deriv, nharm = K_DERIV)
   deriv_scores <- deriv_pca$scores[, 1:K_DERIV, drop = FALSE]
   
@@ -853,7 +855,6 @@ forecast_objects <- list(
     K = K,
     K_DERIV = K_DERIV,
     NBASIS = NBASIS,
-    NBASIS_DERIV = NBASIS_DERIV,
     NORDER = NORDER,
     TEST_START = TEST_START,
     MIN_TRAIN_DAYS = MIN_TRAIN_DAYS,
