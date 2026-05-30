@@ -24,6 +24,21 @@
 
 \vspace{-0.5em}
 
+\section*{Purpose of the project}
+
+This project studies day-ahead forecasting of Turkish electricity demand. The raw
+quantity of interest is not a single daily number, but the full 24-hour load profile:
+how demand evolves overnight, rises in the morning, peaks during the day, and falls
+again in the evening. Treating each day as a curve preserves this intraday shape.
+
+The practical question is whether a functional time-series model can improve on the
+available official day-ahead forecast. The report therefore compares each proposed
+model with two reference points: a simple weekly benchmark, \(Y_{d-7}\), and the
+official forecast, \(\widehat Y^{off}_d\). The weekly benchmark checks whether the
+model beats a very transparent rule based on the strong weekly rhythm of electricity
+use. The official forecast is the main benchmark because it represents the forecast
+that would be available in practice.
+
 \section*{Object and functional representation}
 
 Let \(Y_d(h)\) denote Turkish electricity load on day \(d\), hour \(h=0,\ldots,23\).  
@@ -67,6 +82,41 @@ Y_d(h)=\mu(h)+\Phi(h)'\xi_d+e_d(h),
 \]
 
 All forecasts are rolling-origin forecasts: for target day \(d\), estimation uses only information dated \(<d\). The evaluation period starts on 2023-01-01 and contains \(26{,}304\) hourly observations.
+
+\section*{Why these models}
+
+The model sequence is intentionally incremental. Each specification asks whether one
+additional source of information explains a remaining part of the forecast error.
+
+First, the daily curve is reduced to a small number of FPCA scores. This is useful
+because the 24 hourly observations are highly dependent: morning, afternoon, and
+evening demand move together in recurring ways. FPCA summarizes the main level and
+shape movements of the whole curve, so the forecasting problem becomes forecasting a
+few daily scores rather than 24 separate hourly loads.
+
+The first FPCA models use lagged scores. A weekly lag is natural because electricity
+load has a strong day-of-week structure: Mondays tend to resemble previous Mondays,
+weekends resemble previous weekends, and so on. Adding a one-day lag allows the model
+to react to recent changes in demand level or shape that are not fully captured by
+the same weekday one week earlier. This motivates the FPCA VAR(1,7) score model.
+
+The next additions are calendar, holiday, and load-shape predictors. These variables
+are included because Turkish electricity demand changes around weekends, fixed
+holidays,religious holidays, bridge days, and seasonal school or summer
+periods. Lagged load-shape variables, such as the previous day's mean, peak, range,
+and morning ramp, are included because they describe the current demand regime before
+the target day is forecast.
+
+Derivative features are then added to describe how quickly the load curve is changing
+within the day. Two days can have similar average demand but different ramping
+behavior. The derivative summaries and targeted morning, evening, and end-of-day
+ramps are meant to capture these slope and transition patterns.
+
+Finally, the adaptive correction step addresses systematic residual patterns that
+remain after the score model. If recent forecasts have been too high or too low at
+particular hours, the correction uses those recent residual curves to adjust the
+base forecast. This is not a replacement for the FPCA model; it is a local
+post-processing step designed to correct short-run bias and intraday error patterns.
 
 \section*{Forecasting specifications}
 
@@ -228,6 +278,11 @@ Gain_m^{RMSE}=100\frac{RMSE_{OFF}-RMSE_m}{RMSE_{OFF}}.
 
 \section*{Current results}
 
+The rows below should be read as a model-building path. The first two rows are
+benchmarks. Each later row adds one modeling idea: FPCA score dynamics, calendar and
+ramp information, derivative information, and then adaptive correction of recent
+residual errors.
+
 \begin{center}
 \fontsize{8.2}{9.5}\selectfont
 \begin{tabular}{p{0.41\textwidth}rrrrr}
@@ -254,4 +309,3 @@ The final model improves on the official forecast by \(47.25\%\) in MAE and \(44
 
 
 \end{document}
-
