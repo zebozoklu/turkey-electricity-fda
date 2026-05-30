@@ -14,7 +14,7 @@ dir.create("output/results", recursive = TRUE, showWarnings = FALSE)
 # Settings
 # ------------------------------------------------------------
 
-K <- 4              # number of FPCs
+K <- 2              # number of FPCs
 NBASIS <- 12        # B-spline basis size
 NORDER <- 4         # cubic B-splines
 TEST_START <- as.Date("2023-01-01")
@@ -372,4 +372,3 @@ write.csv(
   "output/tables/simple_fpca_weekly_eval_long.csv",
   row.names = FALSE
 )
-

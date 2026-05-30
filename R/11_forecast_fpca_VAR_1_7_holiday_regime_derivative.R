@@ -1,4 +1,4 @@
-# R/11_forecast_fpca_VAR_1_7_holiday_regime_local_correction.R
+# R/11_forecast_fpca_VAR_1_7_holiday_regime_derivative.R
 
 library(dplyr)
 library(tidyr)
@@ -15,7 +15,8 @@ dir.create("output/results", recursive = TRUE, showWarnings = FALSE)
 # Settings
 # ------------------------------------------------------------
 
-K <- 4
+K <- 2
+K_DERIV <- 3
 NBASIS <- 12
 NORDER <- 4
 TEST_START <- as.Date("2023-01-01")
@@ -23,11 +24,7 @@ MIN_TRAIN_DAYS <- 365
 MIN_LAG_DAYS <- 28
 DEBUG_N <- Inf
 
-MODEL_NAME_BASE <- "FPCA VAR(1,7) + holiday/load regime"
-MODEL_NAME_CORRECTED <- "FPCA VAR(1,7) + holiday/load regime + nested adaptive correction"
-
-VALIDATION_DAYS <- 365
-LAMBDA_GRID <- seq(0, 1.2, by = 0.1)
+MODEL_NAME_BASE <- "FPCA VAR(1,7) + holiday/load/derivative regime"
 
 # ------------------------------------------------------------
 # Load curves
@@ -69,6 +66,9 @@ H5 <- hcol(5)
 H6 <- hcol(6)
 H7 <- hcol(7)
 H9 <- hcol(9)
+H17 <- hcol(17)
+H20 <- hcol(20)
+H23 <- hcol(23)
 
 # ------------------------------------------------------------
 # Calendar and holiday features
@@ -203,15 +203,53 @@ safe_window_ramp <- function(Y_mat, start_idx, end_idx) {
   mean(Y_mat[start_idx:end_idx, H9] - Y_mat[start_idx:end_idx, H6], na.rm = TRUE)
 }
 
+make_fd_object <- function(Y_mat, argvals, nbasis, norder) {
+  basis <- create.bspline.basis(
+    rangeval = range(argvals),
+    nbasis = nbasis,
+    norder = norder
+  )
+  
+  Data2fd(
+    argvals = argvals,
+    y = t(Y_mat),
+    basisobj = basis
+  )
+}
+
+make_derivative_matrix <- function(Y_mat) {
+  fd_obj <- make_fd_object(
+    Y_mat = Y_mat,
+    argvals = hours,
+    nbasis = NBASIS,
+    norder = NORDER
+  )
+  
+  deriv_fd <- deriv.fd(fd_obj, Lfdobj = 1)
+  out <- t(eval.fd(hours, deriv_fd))
+  colnames(out) <- as.character(hours)
+  out
+}
+
 make_load_regime_features <- function(Y_mat, d_index) {
+  D_mat <- make_derivative_matrix(Y_mat)
+  
   bind_rows(lapply(d_index, function(d) {
     lag1 <- Y_mat[d - 1, ]
     lag7 <- Y_mat[d - 7, ]
+    dlag1 <- D_mat[d - 1, ]
+    dlag7 <- D_mat[d - 7, ]
     
     tibble(
       ramp_lag1 = as.numeric(Y_mat[d - 1, H9] - Y_mat[d - 1, H6]),
       ramp_lag7 = as.numeric(Y_mat[d - 7, H9] - Y_mat[d - 7, H6]),
       early_lag1 = mean(Y_mat[d - 1, c(H5, H6, H7)], na.rm = TRUE),
+      early_ramp_lag1 = as.numeric(Y_mat[d - 1, H7] - Y_mat[d - 1, H5]),
+      early_ramp_lag7 = as.numeric(Y_mat[d - 7, H7] - Y_mat[d - 7, H5]),
+      evening_ramp_lag1 = as.numeric(Y_mat[d - 1, H20] - Y_mat[d - 1, H17]),
+      evening_ramp_lag7 = as.numeric(Y_mat[d - 7, H20] - Y_mat[d - 7, H17]),
+      day_end_drop_lag1 = as.numeric(Y_mat[d - 1, H23] - Y_mat[d - 1, H20]),
+      day_end_drop_lag7 = as.numeric(Y_mat[d - 7, H23] - Y_mat[d - 7, H20]),
       mean_lag1 = mean(lag1, na.rm = TRUE),
       mean_lag7 = mean(lag7, na.rm = TRUE),
       peak_lag1 = max(lag1, na.rm = TRUE),
@@ -223,7 +261,15 @@ make_load_regime_features <- function(Y_mat, d_index) {
       roll_mean_7 = safe_window_mean(Y_mat, d - 7, d - 1),
       roll_mean_28 = safe_window_mean(Y_mat, d - 28, d - 1),
       roll_ramp_7 = safe_window_ramp(Y_mat, d - 7, d - 1),
-      roll_ramp_28 = safe_window_ramp(Y_mat, d - 28, d - 1)
+      roll_ramp_28 = safe_window_ramp(Y_mat, d - 28, d - 1),
+      deriv_sd_lag1 = sd(dlag1, na.rm = TRUE),
+      deriv_sd_lag7 = sd(dlag7, na.rm = TRUE),
+      deriv_max_lag1 = max(dlag1, na.rm = TRUE),
+      deriv_max_lag7 = max(dlag7, na.rm = TRUE),
+      deriv_min_lag1 = min(dlag1, na.rm = TRUE),
+      deriv_min_lag7 = min(dlag7, na.rm = TRUE),
+      deriv_range_lag1 = max(dlag1, na.rm = TRUE) - min(dlag1, na.rm = TRUE),
+      deriv_range_lag7 = max(dlag7, na.rm = TRUE) - min(dlag7, na.rm = TRUE)
     )
   }))
 }
@@ -258,57 +304,6 @@ standardize_train_new <- function(Z_train, Z_new) {
 clean_coefficients <- function(coef_mat) {
   coef_mat[is.na(coef_mat)] <- 0
   coef_mat
-}
-
-evaluate_lambda <- function(actual, base, correction, lambda) {
-  err <- as.vector(actual - (base + lambda * correction))
-  mean(abs(err), na.rm = TRUE)
-}
-
-choose_lambda_from_history <- function(
-    X_score, Y_score, X_resid, actual_curves, mu_hat, phi_hat) {
-  
-  n_reg <- nrow(X_score)
-  n_val <- min(VALIDATION_DAYS, floor(0.25 * n_reg))
-  
-  if (n_val < 30 || (n_reg - n_val) < 60) {
-    return(0.6)
-  }
-  
-  train_rows <- seq_len(n_reg - n_val)
-  val_rows <- (n_reg - n_val + 1):n_reg
-  
-  fit_score <- lm.fit(X_score[train_rows, , drop = FALSE], Y_score[train_rows, , drop = FALSE])
-  B_hat <- clean_coefficients(fit_score$coefficients)
-  
-  score_train_fitted <- X_score[train_rows, , drop = FALSE] %*% B_hat
-  fitted_train_curves <- score_train_fitted %*% t(phi_hat)
-  fitted_train_curves <- sweep(fitted_train_curves, 2, mu_hat, "+")
-  
-  residual_train_curves <- actual_curves[train_rows, , drop = FALSE] - fitted_train_curves
-  
-  fit_resid <- lm.fit(
-    X_resid[train_rows, , drop = FALSE],
-    residual_train_curves
-  )
-  G_hat <- clean_coefficients(fit_resid$coefficients)
-  
-  score_val <- X_score[val_rows, , drop = FALSE] %*% B_hat
-  base_val <- score_val %*% t(phi_hat)
-  base_val <- sweep(base_val, 2, mu_hat, "+")
-  
-  correction_val <- X_resid[val_rows, , drop = FALSE] %*% G_hat
-  actual_val <- actual_curves[val_rows, , drop = FALSE]
-  
-  lambda_scores <- tibble(
-    lambda = LAMBDA_GRID,
-    mae = sapply(
-      LAMBDA_GRID,
-      function(lambda) evaluate_lambda(actual_val, base_val, correction_val, lambda)
-    )
-  )
-  
-  lambda_scores$lambda[which.min(lambda_scores$mae)]
 }
 
 feature_indices <- (MIN_LAG_DAYS + 1):n_days
@@ -355,26 +350,27 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
   dates_train <- dates[1:(i - 1)]
   n_train <- nrow(Y_train)
   
-  basis <- create.bspline.basis(
-    rangeval = range(hours),
+  fd_train <- make_fd_object(
+    Y_mat = Y_train,
+    argvals = hours,
     nbasis = nbasis,
     norder = norder
   )
   
-  fd_train <- Data2fd(
-    argvals = hours,
-    y = t(Y_train),
-    basisobj = basis
-  )
-  
   pca <- pca.fd(fd_train, nharm = K)
   scores <- pca$scores[, 1:K, drop = FALSE]
+  
+  fd_deriv <- deriv.fd(fd_train, Lfdobj = 1)
+  deriv_pca <- pca.fd(fd_deriv, nharm = K_DERIV)
+  deriv_scores <- deriv_pca$scores[, 1:K_DERIV, drop = FALSE]
   
   d_index <- (MIN_LAG_DAYS + 1):n_train
   
   Y_score <- scores[d_index, , drop = FALSE]
   X_lag1 <- scores[d_index - 1, , drop = FALSE]
   X_lag7 <- scores[d_index - 7, , drop = FALSE]
+  X_deriv_lag1 <- deriv_scores[d_index - 1, , drop = FALSE]
+  X_deriv_lag7 <- deriv_scores[d_index - 7, , drop = FALSE]
   
   Z_train_raw <- get_feature_rows(d_index)
   Z_new_raw <- get_feature_rows(i)
@@ -385,6 +381,8 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
     intercept = 1,
     X_lag1,
     X_lag7,
+    X_deriv_lag1,
+    X_deriv_lag7,
     Z_scaled$Z_train
   )
   
@@ -392,27 +390,13 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
     "intercept",
     paste0("lag1_score", 1:K),
     paste0("lag7_score", 1:K),
+    paste0("lag1_deriv_score", 1:K_DERIV),
+    paste0("lag7_deriv_score", 1:K_DERIV),
     colnames(Z_train_raw)
   )
   
   mu_hat <- as.vector(eval.fd(hours, pca$meanfd))
   phi_hat <- eval.fd(hours, pca$harmonics)
-
-  actual_train_curves <- Y_train[d_index, , drop = FALSE]
-  
-  X_resid <- cbind(
-    intercept = 1,
-    Z_scaled$Z_train
-  )
-  
-  selected_lambda <- choose_lambda_from_history(
-    X_score = X_score,
-    Y_score = Y_score,
-    X_resid = X_resid,
-    actual_curves = actual_train_curves,
-    mu_hat = mu_hat,
-    phi_hat = phi_hat
-  )
   
   fit_score <- lm.fit(X_score, Y_score)
   B_hat <- clean_coefficients(fit_score$coefficients)
@@ -421,6 +405,8 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
     1,
     scores[n_train, ],
     scores[n_train - 6, ],
+    deriv_scores[n_train, ],
+    deriv_scores[n_train - 6, ],
     as.numeric(Z_scaled$Z_new)
   )
   
@@ -428,30 +414,11 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
   
   y_base <- as.vector(mu_hat + phi_hat %*% score_hat)
   
-  score_fitted <- X_score %*% B_hat
-  fitted_curves <- score_fitted %*% t(phi_hat)
-  fitted_curves <- sweep(fitted_curves, 2, mu_hat, "+")
-  
-  residual_train_curves <- actual_train_curves - fitted_curves
-  
-  x_resid_new <- c(
-    1,
-    as.numeric(Z_scaled$Z_new)
-  )
-  
-  fit_resid <- lm.fit(X_resid, residual_train_curves)
-  G_hat <- clean_coefficients(fit_resid$coefficients)
-  
-  correction_hat <- as.vector(x_resid_new %*% G_hat)
-  y_corrected <- y_base + selected_lambda * correction_hat
-  
   list(
     forecast_base = y_base,
-    forecast_corrected = y_corrected,
     score_hat = score_hat,
-    correction_hat = correction_hat,
-    selected_lambda = selected_lambda,
     varprop = pca$varprop[1:K],
+    deriv_varprop = deriv_pca$varprop[1:K_DERIV],
     z_new_raw = Z_new_raw
   )
 }
@@ -467,9 +434,6 @@ pred_base <- matrix(
   dimnames = list(as.character(dates[test_idx]), as.character(hours))
 )
 
-pred_corrected <- pred_base
-correction_mat <- pred_base
-
 score_forecasts <- matrix(
   NA_real_,
   nrow = length(test_idx),
@@ -484,8 +448,14 @@ varprops <- matrix(
   dimnames = list(as.character(dates[test_idx]), paste0("FPC", 1:K))
 )
 
+deriv_varprops <- matrix(
+  NA_real_,
+  nrow = length(test_idx),
+  ncol = K_DERIV,
+  dimnames = list(as.character(dates[test_idx]), paste0("deriv_FPC", 1:K_DERIV))
+)
+
 feature_track <- list()
-selected_lambdas <- rep(NA_real_, length(test_idx))
 
 for (j in seq_along(test_idx)) {
   i <- test_idx[j]
@@ -501,11 +471,9 @@ for (j in seq_along(test_idx)) {
   )
   
   pred_base[j, ] <- out$forecast_base
-  pred_corrected[j, ] <- out$forecast_corrected
-  correction_mat[j, ] <- out$correction_hat
-  selected_lambdas[j] <- out$selected_lambda
   score_forecasts[j, ] <- out$score_hat
   varprops[j, ] <- out$varprop
+  deriv_varprops[j, ] <- out$deriv_varprop
   feature_track[[j]] <- out$z_new_raw
   
   if (j %% 25 == 0) {
@@ -516,11 +484,6 @@ for (j in seq_along(test_idx)) {
 
 feature_track_df <- bind_rows(feature_track) |>
   mutate(date = dates[test_idx], .before = 1)
-
-lambda_track_df <- tibble(
-  date = dates[test_idx],
-  selected_lambda = selected_lambdas
-)
 
 # ------------------------------------------------------------
 # Benchmarks
@@ -553,8 +516,7 @@ make_eval_df <- function(actual, pred, model_name) {
 
 eval_df <- bind_rows(
   make_eval_df(actual_test, pred_naive, "Seasonal naive: Y[d-7]"),
-  make_eval_df(actual_test, pred_base, MODEL_NAME_BASE),
-  make_eval_df(actual_test, pred_corrected, MODEL_NAME_CORRECTED)
+  make_eval_df(actual_test, pred_base, MODEL_NAME_BASE)
 )
 
 if (has_official) {
@@ -604,7 +566,7 @@ print(metric_table)
 
 write_csv(
   metric_table,
-  "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_metrics_overall.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_metrics_overall.csv"
 )
 
 metrics_by_hour <- eval_df |>
@@ -634,82 +596,13 @@ metrics_by_year <- eval_df |>
     .groups = "drop"
   )
 
-write_csv(metrics_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_by_hour.csv")
-write_csv(metrics_by_month, "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_by_month.csv")
-write_csv(metrics_by_year, "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_by_year.csv")
-
-# ------------------------------------------------------------
-# Gain diagnostics
-# ------------------------------------------------------------
-
-comparison <- eval_df |>
-  filter(model %in% c(MODEL_NAME_BASE, MODEL_NAME_CORRECTED)) |>
-  dplyr::select(date, hour, model, abs_error, sq_error) |>
-  pivot_wider(
-    names_from = model,
-    values_from = c(abs_error, sq_error)
-  )
-
-names(comparison) <- make.names(names(comparison))
-
-abs_base_col <- make.names(paste0("abs_error_", MODEL_NAME_BASE))
-abs_new_col <- make.names(paste0("abs_error_", MODEL_NAME_CORRECTED))
-sq_base_col <- make.names(paste0("sq_error_", MODEL_NAME_BASE))
-sq_new_col <- make.names(paste0("sq_error_", MODEL_NAME_CORRECTED))
-
-comparison <- comparison |>
-  mutate(
-    mae_gain_from_adaptive_correction = .data[[abs_base_col]] - .data[[abs_new_col]],
-    mse_gain_from_adaptive_correction = .data[[sq_base_col]] - .data[[sq_new_col]]
-  )
-
-gain_overall <- comparison |>
-  summarise(
-    mae_gain_from_adaptive_correction = mean(
-      mae_gain_from_adaptive_correction,
-      na.rm = TRUE
-    ),
-    mse_gain_from_adaptive_correction = mean(
-      mse_gain_from_adaptive_correction,
-      na.rm = TRUE
-    )
-  )
-
-gain_by_hour <- comparison |>
-  group_by(hour) |>
-  summarise(
-    mae_gain_from_adaptive_correction = mean(
-      mae_gain_from_adaptive_correction,
-      na.rm = TRUE
-    ),
-    mse_gain_from_adaptive_correction = mean(
-      mse_gain_from_adaptive_correction,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  )
-
-print(gain_overall)
-
-write_csv(gain_overall, "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_gain_overall.csv")
-write_csv(gain_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_gain_by_hour.csv")
-
-correction_df <- as_tibble(correction_mat) |>
-  mutate(date = dates[test_idx], .before = 1)
-
-write_csv(
-  correction_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_values.csv"
-)
+write_csv(metrics_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_by_hour.csv")
+write_csv(metrics_by_month, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_by_month.csv")
+write_csv(metrics_by_year, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_by_year.csv")
 
 write_csv(
   feature_track_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_features_used.csv"
-)
-
-write_csv(
-  lambda_track_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_selected_lambdas.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_features_used.csv"
 )
 
 # ------------------------------------------------------------
@@ -727,7 +620,7 @@ p_hour <- metrics_by_hour |>
   )
 
 ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_local_correction_mae_by_hour.png",
+  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_mae_by_hour.png",
   p_hour,
   width = 9,
   height = 5
@@ -745,70 +638,44 @@ p_month <- metrics_by_month |>
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_local_correction_mae_by_month.png",
+  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_mae_by_month.png",
   p_month,
   width = 10,
   height = 5
 )
 
-p_gain <- gain_by_hour |>
-  ggplot(aes(hour, mae_gain_from_adaptive_correction)) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_line(linewidth = 1) +
-  labs(
-    x = "Hour",
-    y = "MAE gain from adaptive correction",
-    title = "Positive values mean adaptive correction improves the enriched base model"
-  )
-
-ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_local_correction_gain_by_hour.png",
-  p_gain,
-  width = 8,
-  height = 4.8
-)
-
-# ------------------------------------------------------------
-# Save result object
-# ------------------------------------------------------------
-
 forecast_objects <- list(
   dates = dates[test_idx],
   hours = hours,
   actual = actual_test,
-  base_holiday_regime = pred_base,
-  corrected_forecast = pred_corrected,
+  holiday_derivative_regime = pred_base,
   seasonal_naive = pred_naive,
   official_forecast = if (has_official) pred_official else NULL,
-  correction = correction_mat,
   score_forecasts = score_forecasts,
   varprops = varprops,
+  deriv_varprops = deriv_varprops,
   features_used = feature_track_df,
   settings = list(
     K = K,
+    K_DERIV = K_DERIV,
     NBASIS = NBASIS,
     NORDER = NORDER,
     TEST_START = TEST_START,
     MIN_TRAIN_DAYS = MIN_TRAIN_DAYS,
-    MIN_LAG_DAYS = MIN_LAG_DAYS,
-    VALIDATION_DAYS = VALIDATION_DAYS,
-    LAMBDA_GRID = LAMBDA_GRID
+    MIN_LAG_DAYS = MIN_LAG_DAYS
   ),
-  selected_lambdas = lambda_track_df,
   metrics_overall = metric_table,
   metrics_by_hour = metrics_by_hour,
   metrics_by_month = metrics_by_month,
-  metrics_by_year = metrics_by_year,
-  gain_overall = gain_overall,
-  gain_by_hour = gain_by_hour
+  metrics_by_year = metrics_by_year
 )
 
 saveRDS(
   forecast_objects,
-  "output/results/fpca_VAR_1_7_holiday_regime_local_correction_forecast_results.rds"
+  "output/results/fpca_VAR_1_7_holiday_regime_derivative_forecast_results.rds"
 )
 
 write_csv(
   eval_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_eval_long.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_eval_long.csv"
 )

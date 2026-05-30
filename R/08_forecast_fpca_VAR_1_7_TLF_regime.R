@@ -13,7 +13,7 @@ dir.create("output/results", recursive = TRUE, showWarnings = FALSE)
 # Settings
 # ------------------------------------------------------------
 
-K <- 4
+K <- 2
 NBASIS <- 12
 NORDER <- 4
 TEST_START <- as.Date("2023-01-01")
@@ -454,6 +454,5 @@ write_csv(
   eval_df,
   "output/tables/fpca_VAR_1_7_TLF_regime_eval_long.csv"
 )
-
 
 

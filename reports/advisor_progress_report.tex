@@ -1,32 +1,42 @@
-\documentclass[10pt]{article}
 
-% Pure LaTeX: no extra packages required.
-\setlength{\textwidth}{7.25in}
-\setlength{\textheight}{9.75in}
-\setlength{\oddsidemargin}{-0.35in}
-\setlength{\evensidemargin}{-0.35in}
-\setlength{\topmargin}{-0.65in}
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{2pt}
-\setlength{\abovedisplayskip}{3pt}
-\setlength{\belowdisplayskip}{3pt}
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[
+  a4paper,
+  left=0.85in,
+  right=0.85in,
+  top=0.75in,
+  bottom=0.85in
+]{geometry}
+
+\usepackage[hidelinks]{hyperref}
+\usepackage[round,authoryear]{natbib}
+
+\usepackage{indentfirst} % also indents first paragraph after section titles
+\setlength{\parindent}{1.5em}
+\setlength{\parskip}{0pt}
+\setlength{\abovedisplayskip}{4pt}
+\setlength{\belowdisplayskip}{4pt}
 \setlength{\arraycolsep}{3pt}
 \renewcommand{\arraystretch}{1.08}
+
 
 \begin{document}
 \fontsize{9.2}{10.8}\selectfont
 
 \begin{center}
-{\Large Functional Forecasting of Turkish Electricity Load Curves - Preliminary Report}\\
+{\Large Thesis Proposal: Functional Forecasting of Turkish Electricity Load Curves}\\
 \vspace{0.5em}
-{\normalsize Zeynep Bozoklu}
+{\normalsize Zeynep Bozoklu}\\
+\vspace{0.25em}
+{\small \href{https://github.com/zebozoklu/turkey-electricity-fda}{GitHub repository}}
 \end{center}
 
 \vspace{-0.5em}
 
-\section*{Purpose of the project}
+\section*{Motivation}
 
-This project studies day-ahead forecasting of Turkish electricity demand. The raw
+This project studies day-ahead forecasting of Turkish electricity demand, measured hourly in MWh. The raw
 quantity of interest is not a single daily number, but the full 24-hour load profile:
 how demand evolves overnight, rises in the morning, peaks during the day, and falls
 again in the evening. Treating each day as a curve preserves this intraday shape.
@@ -38,6 +48,13 @@ official forecast, \(\widehat Y^{off}_d\). The weekly benchmark checks whether t
 model beats a very transparent rule based on the strong weekly rhythm of electricity
 use. The official forecast is the main benchmark because it represents the forecast
 that would be available in practice.
+
+The proposed baseline contribution is a parsimonious functional forecasting model:
+daily curves are represented by FPCA scores, the scores are forecast with lagged
+functional dynamics and predetermined calendar, holiday, load-shape, and derivative
+features, and forecasts are evaluated in a rolling-origin design. A second-stage
+residual adjustment is reported separately as a possible extension to discuss rather
+than as the main specification.
 
 \section*{Object and functional representation}
 
@@ -64,8 +81,34 @@ Y_d(h)\simeq \sum_{m=1}^{M}c_{dm}B_m(h),
 FPCA gives
 \[
 Y_d(h)=\mu(h)+\sum_{k=1}^{K}\xi_{dk}\phi_k(h)+e_d(h),
-\qquad K=4.
+\qquad K=2.
 \]
+
+The choice \(K=2\) is based on the empirical FPCA variance decomposition of the
+load curves. The first two load components explain \(97.29\%\) of total functional
+variation, exceeding the usual 95\% cumulative-variance rule while keeping the
+score vector parsimonious. The first component mainly captures the overall daily
+level and the second adds the dominant intraday shape contrast. Components three
+and four explain only \(1.11\%\) and \(0.99\%\) of additional load variation,
+respectively, so they are not retained in the forecasting model. The official
+forecast-error FPCA is reported only as a diagnostic description of error shape; it
+is not used to choose \(K\).
+
+\begin{center}
+\fontsize{8.4}{9.6}\selectfont
+\begin{tabular}{rrrrr}
+\hline
+FPC & Load var. & Load cum. & Error var. & Error cum.\\
+\hline
+1 & 93.40\% & 93.40\% & 76.60\% & 76.60\%\\
+2 & 3.89\% & 97.29\% & 12.00\% & 88.60\%\\
+3 & 1.11\% & 98.40\% & 4.62\% & 93.22\%\\
+4 & 0.99\% & 99.39\% & 2.88\% & 96.09\%\\
+\hline
+\end{tabular}
+\end{center}
+
+\fontsize{9.2}{10.8}\selectfont
 
 Let
 \[
@@ -83,7 +126,7 @@ Y_d(h)=\mu(h)+\Phi(h)'\xi_d+e_d(h),
 
 All forecasts are rolling-origin forecasts: for target day \(d\), estimation uses only information dated \(<d\). The evaluation period starts on 2023-01-01 and contains \(26{,}304\) hourly observations.
 
-\section*{Why these models}
+\section*{Proposed modeling strategy}
 
 The model sequence is intentionally incremental. Each specification asks whether one
 additional source of information explains a remaining part of the forecast error.
@@ -101,8 +144,8 @@ to react to recent changes in demand level or shape that are not fully captured 
 the same weekday one week earlier. This motivates the FPCA VAR(1,7) score model.
 
 The next additions are calendar, holiday, and load-shape predictors. These variables
-are included because Turkish electricity demand changes around weekends, fixed
-holidays,religious holidays, bridge days, and seasonal school or summer
+are included because Turkish electricity demand changes around weekends, national
+holidays, religious holidays, bridge days, and seasonal school or summer
 periods. Lagged load-shape variables, such as the previous day's mean, peak, range,
 and morning ramp, are included because they describe the current demand regime before
 the target day is forecast.
@@ -111,12 +154,6 @@ Derivative features are then added to describe how quickly the load curve is cha
 within the day. Two days can have similar average demand but different ramping
 behavior. The derivative summaries and targeted morning, evening, and end-of-day
 ramps are meant to capture these slope and transition patterns.
-
-Finally, the adaptive correction step addresses systematic residual patterns that
-remain after the score model. If recent forecasts have been too high or too low at
-particular hours, the correction uses those recent residual curves to adjust the
-base forecast. This is not a replacement for the FPCA model; it is a local
-post-processing step designed to correct short-run bias and intraday error patterns.
 
 \section*{Forecasting specifications}
 
@@ -151,9 +188,9 @@ Augmented score model:
 \]
 where \(z_d\) is predetermined at date \(d\).
 
-Final corrected forecast:
+Residual-extension forecast:
 \[
-\widehat Y_d^{final}(h)
+\widehat Y_d^{res}(h)
 =
 \widehat\mu(h)+\widehat{\Phi}(h)'\widehat\xi_d+\lambda_d\widehat r_d(h).
 \]
@@ -239,19 +276,6 @@ R^{ev}_{d-1}=Y_{d-1}(20)-Y_{d-1}(17),
 R^{end}_{d-1}=Y_{d-1}(23)-Y_{d-1}(20).
 \]
 
-Adaptive correction uses past residuals
-\[
-\widehat e_s(h)=Y_s(h)-\widehat Y_s^{base}(h),
-\qquad s<d,
-\]
-and applies
-\[
-\widehat Y_d^{corr}(h)
-=
-\widehat Y_d^{base}(h)+\lambda_d\widehat r_d(h),
-\]
-where \(\widehat r_d(h)\) is estimated from recent residual patterns and \(\lambda_d\) is selected on a validation window.
-
 \section*{Evaluation}
 
 For model \(m\),
@@ -276,12 +300,11 @@ Gain_m^{MAE}=100\frac{MAE_{OFF}-MAE_m}{MAE_{OFF}},
 Gain_m^{RMSE}=100\frac{RMSE_{OFF}-RMSE_m}{RMSE_{OFF}}.
 \]
 
-\section*{Current results}
+\section*{Preliminary results}
 
 The rows below should be read as a model-building path. The first two rows are
 benchmarks. Each later row adds one modeling idea: FPCA score dynamics, calendar and
-ramp information, derivative information, and then adaptive correction of recent
-residual errors.
+ramp information, holiday/load-shape information, and derivative information.
 
 \begin{center}
 \fontsize{8.2}{9.5}\selectfont
@@ -291,21 +314,150 @@ Model & MAE & RMSE & Bias & MAE gain & RMSE gain\\
 \hline
 Seasonal naive \(Y_{d-7}\) & 1912.46 & 3129.98 & 39.85 & -57.60\% & -79.85\%\\
 Official forecast & 1213.50 & 1740.30 & 466.87 & 0.00\% & 0.00\%\\
-FPCA VAR(1,7) scores & 1071.13 & 1562.67 & -55.00 & 11.73\% & 10.21\%\\
-FPCA VAR(1,7) + ramp/calendar & 1031.79 & 1493.24 & 112.34 & 14.97\% & 14.20\%\\
-FPCA VAR(1,7) + derivative features & 890.01 & 1286.78 & 91.28 & 26.66\% & 26.06\%\\
-FPCA VAR(1,7) + holiday/load-shape + adaptive correction & 666.49 & 996.22 & 66.46 & 45.08\% & 42.76\%\\
-FPCA VAR(1,7) + holiday/load-shape/derivative + adaptive correction & {\bf 640.10} & {\bf 967.82} & {\bf 103.39} & {\bf 47.25\%} & {\bf 44.39\%}\\
+FPCA VAR(1,7) scores & 1442.61 & 2018.30 & 160.13 & -18.88\% & -15.97\%\\
+FPCA VAR(1,7) + ramp/calendar & 1238.37 & 1716.30 & 110.12 & -2.05\% & 1.38\%\\
+FPCA VAR(1,7) + holiday/load-shape & 1000.62 & 1353.56 & -54.71 & 17.54\% & 22.22\%\\
+FPCA VAR(1,7) + holiday/load-shape/derivative & {\bf 980.38} & {\bf 1324.40} & {\bf 102.56} & {\bf 19.21\%} & {\bf 23.90\%}\\
 \hline
 \end{tabular}
 \end{center}
 
 \fontsize{9.2}{10.8}\selectfont
 
-The final model improves on the official forecast by \(47.25\%\) in MAE and \(44.39\%\) in RMSE. Relative to the weekly seasonal naive benchmark,
+The final model improves on the official forecast by \(19.21\%\) in MAE and \(23.90\%\) in RMSE. Relative to the weekly seasonal naive benchmark,
 \[
-100\frac{1912.46-640.10}{1912.46}=66.53\%.
+100\frac{1912.46-980.38}{1912.46}=48.74\%.
 \]
+
+\section*{Discussion: K and residual choices}
+
+The main report uses \(K=2\), because this follows the 95\% cumulative-variance rule
+for the load FPCA and gives the most parsimonious score model. The cost of this
+choice is some loss of accuracy relative to \(K=4\). The \(K=4\) no-residual model
+has lower overall MAE and RMSE, and it beats the official forecast in 23 of 24 hours
+by MAE and 24 of 24 hours by RMSE. The \(K=2\) no-residual model wins in 19 of 24
+hours by MAE and 21 of 24 hours by RMSE.
+
+\begin{center}
+\fontsize{7.6}{8.8}\selectfont
+\begin{tabular}{p{0.26\textwidth}rrrrrr}
+\hline
+Specification & \(K\) & Resid. step & MAE & RMSE & MAE gain & RMSE gain\\
+\hline
+Holiday/load/derivative & 2 & No & 980.38 & 1324.40 & 19.21\% & 23.90\%\\
+Holiday/load/derivative & 2 & Yes & 652.90 & 982.60 & 46.20\% & 43.54\%\\
+Holiday/load/derivative & 4 & No & 800.99 & 1109.69 & 33.99\% & 36.24\%\\
+Holiday/load/derivative & 4 & Yes & {\bf 640.10} & {\bf 967.82} & {\bf 47.25\%} & {\bf 44.39\%}\\
+\hline
+\end{tabular}
+\end{center}
+
+\fontsize{9.2}{10.8}\selectfont
+
+The table suggests a tradeoff between parsimony and predictive accuracy.
+The \(K=2\) specification is the conservative baseline, while \(K=4\) retains
+additional intraday shape variation and improves the no-residual forecast.
+I therefore keep \(K=2\) as the main specification, but report \(K=4\) as a robustness check.
+
+The second-stage residual correction should be interpreted even more cautiously, especially its methodological appropriateness.
+The closest related papers are not functional forecasting papers,
+but papers on residual post-processing and error compensation in electricity forecasting.
+\citet{xie_hong_2016} use forecast combination and residual simulation in probabilistic electricity load forecasting.
+\citet{wang_etal_2012} use residual modification models to improve seasonal ARIMA electricity demand forecasts.
+\citet{kontogiannis_etal_2022} estimate hourly residual error sequences to refine day-ahead electricity price forecasts.
+\citet{ghimire_etal_2024} also use a two-step forecasting design in which an initial electricity price forecast is improved by an error-compensation model.
+These papers motivate the idea of learning from past forecast errors, but I do not yet claim that they validate the exact functional residual correction used here.
+For this reason, I treat the residual correction as a promising empirical extension rather than as the main model.
+
+For target day
+\(d\), the base model is first estimated exactly as before. Then fitted residual
+curves are computed only for days strictly before the target day,
+\[
+\widehat e_s(h)=Y_s(h)-\widehat Y_s^{base}(h),
+\qquad s<d.
+\]
+The residual second step estimates a correction curve \(\widehat r_d(h)\) from these
+past residuals and applies
+\[
+\widehat Y_d^{res}(h)=\widehat Y_d^{base}(h)+\lambda_d\widehat r_d(h).
+\]
+Both the residual regression and the validation choice of \(\lambda_d\) use only
+information dated strictly before \(d\). Thus the extension is still rolling-origin
+and is designed to avoid information leakage.
+
+
+
+\begin{center}
+\fontsize{8.2}{9.5}\selectfont
+\begin{tabular}{p{0.43\textwidth}rrrrr}
+\hline
+Model & MAE & RMSE & Bias & MAE gain & RMSE gain\\
+\hline
+Best base model & 980.38 & 1324.40 & 102.56 & 19.21\% & 23.90\%\\
+Base model + residual second step & {\bf 652.90} & {\bf 982.60} & {\bf 90.03} & {\bf 46.20\%} & {\bf 43.54\%}\\
+\hline
+\end{tabular}
+\end{center}
+
+\fontsize{9.2}{10.8}\selectfont
+
+
+\section*{Conclusion}
+
+This preliminary report treats Turkish hourly electricity load as daily curves and
+evaluates whether an FPCA-based rolling-origin model can improve on the official
+day-ahead forecast. The conservative \(K=2\) specification improves on the official
+forecast by \(19.21\%\) in MAE and \(23.90\%\) in RMSE.
+
+The results suggest that intraday load-shape information, calendar effects, holidays,
+and derivative/ramp features contain useful predictive information. However, the
+model specification is still preliminary. Further work is needed to decide how many
+components should be retained, whether the residual correction is methodologically
+appropriate, and how the forecast gains can be connected to the economic intuition
+behind intraday demand patterns and system operation.
+
+
+
+\begin{thebibliography}{99}
+
+\bibitem[Xie and Hong(2016)]{xie_hong_2016}
+Xie, J. and Hong, T. (2016).
+GEFCom2014 probabilistic electric load forecasting: An integrated solution with
+forecast combination and residual simulation.
+\textit{International Journal of Forecasting}, 32(3), 1012--1016.
+\href{https://doi.org/10.1016/j.ijforecast.2015.11.005}{doi:10.1016/j.ijforecast.2015.11.005}.
+
+\bibitem[Wang et al.(2012)]{wang_etal_2012}
+Wang, Y., Wang, J., Zhao, G. and Dong, Y. (2012).
+Application of residual modification approach in seasonal ARIMA for electricity
+demand forecasting: A case study of China.
+\textit{Energy Policy}, 48, 284--294.
+\href{https://doi.org/10.1016/j.enpol.2012.05.026}{doi:10.1016/j.enpol.2012.05.026}.
+
+\bibitem[Kontogiannis et al.(2022)]{kontogiannis_etal_2022}
+Kontogiannis, D., Bargiotas, D., Daskalopulu, A., Arvanitidis, A. I. and
+Tsoukalas, L. H. (2022).
+Error compensation enhanced day-ahead electricity price forecasting.
+\textit{Energies}, 15(4), 1466.
+\href{https://doi.org/10.3390/en15041466}{doi:10.3390/en15041466}.
+
+\bibitem[Ghimire et al.(2024)]{ghimire_etal_2024}
+Ghimire, S., Deo, R. C., Casillas-Pérez, D. and Salcedo-Sanz, S. (2024).
+Two-step deep learning framework with error compensation technique for short-term,
+half-hourly electricity price forecasting.
+\textit{Applied Energy}, 353, 122059.
+\href{https://doi.org/10.1016/j.apenergy.2023.122059}{doi:10.1016/j.apenergy.2023.122059}.
+
+\bibitem[Kokoszka and Reimherr(2017)]{kokoszka_reimherr_2017}
+Kokoszka, P. and Reimherr, M. (2017).
+\textit{Introduction to Functional Data Analysis}.
+CRC Press.
+
+\end{thebibliography}
+
+
+
+
 
 
 \end{document}

@@ -1,4 +1,4 @@
-# R/15_forecast_fpca_VAR_1_7_holiday_regime_derivative_local_correction.R
+# R/12_forecast_fpca_VAR_1_7_holiday_regime_derivative_residual_step.R
 
 library(dplyr)
 library(tidyr)
@@ -25,7 +25,7 @@ MIN_LAG_DAYS <- 28
 DEBUG_N <- Inf
 
 MODEL_NAME_BASE <- "FPCA VAR(1,7) + holiday/load/derivative regime"
-MODEL_NAME_CORRECTED <- "FPCA VAR(1,7) + holiday/load/derivative regime + nested adaptive correction"
+MODEL_NAME_RESIDUAL <- "FPCA VAR(1,7) + holiday/load/derivative regime + residual second step"
 
 VALIDATION_DAYS <- 365
 LAMBDA_GRID <- seq(0, 1.2, by = 0.1)
@@ -328,7 +328,10 @@ choose_lambda_from_history <- function(
   train_rows <- seq_len(n_reg - n_val)
   val_rows <- (n_reg - n_val + 1):n_reg
   
-  fit_score <- lm.fit(X_score[train_rows, , drop = FALSE], Y_score[train_rows, , drop = FALSE])
+  fit_score <- lm.fit(
+    X_score[train_rows, , drop = FALSE],
+    Y_score[train_rows, , drop = FALSE]
+  )
   B_hat <- clean_coefficients(fit_score$coefficients)
   
   score_train_fitted <- X_score[train_rows, , drop = FALSE] %*% B_hat
@@ -452,7 +455,7 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
   
   mu_hat <- as.vector(eval.fd(hours, pca$meanfd))
   phi_hat <- eval.fd(hours, pca$harmonics)
-
+  
   actual_train_curves <- Y_train[d_index, , drop = FALSE]
   
   X_resid <- cbind(
@@ -500,11 +503,11 @@ forecast_one_day <- function(i, Y, dates, hours, K, nbasis, norder) {
   G_hat <- clean_coefficients(fit_resid$coefficients)
   
   correction_hat <- as.vector(x_resid_new %*% G_hat)
-  y_corrected <- y_base + selected_lambda * correction_hat
+  y_residual_step <- y_base + selected_lambda * correction_hat
   
   list(
     forecast_base = y_base,
-    forecast_corrected = y_corrected,
+    forecast_residual_step = y_residual_step,
     score_hat = score_hat,
     correction_hat = correction_hat,
     selected_lambda = selected_lambda,
@@ -525,7 +528,7 @@ pred_base <- matrix(
   dimnames = list(as.character(dates[test_idx]), as.character(hours))
 )
 
-pred_corrected <- pred_base
+pred_residual_step <- pred_base
 correction_mat <- pred_base
 
 score_forecasts <- matrix(
@@ -566,7 +569,7 @@ for (j in seq_along(test_idx)) {
   )
   
   pred_base[j, ] <- out$forecast_base
-  pred_corrected[j, ] <- out$forecast_corrected
+  pred_residual_step[j, ] <- out$forecast_residual_step
   correction_mat[j, ] <- out$correction_hat
   selected_lambdas[j] <- out$selected_lambda
   score_forecasts[j, ] <- out$score_hat
@@ -620,7 +623,7 @@ make_eval_df <- function(actual, pred, model_name) {
 eval_df <- bind_rows(
   make_eval_df(actual_test, pred_naive, "Seasonal naive: Y[d-7]"),
   make_eval_df(actual_test, pred_base, MODEL_NAME_BASE),
-  make_eval_df(actual_test, pred_corrected, MODEL_NAME_CORRECTED)
+  make_eval_df(actual_test, pred_residual_step, MODEL_NAME_RESIDUAL)
 )
 
 if (has_official) {
@@ -670,7 +673,7 @@ print(metric_table)
 
 write_csv(
   metric_table,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_metrics_overall.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_metrics_overall.csv"
 )
 
 metrics_by_hour <- eval_df |>
@@ -700,16 +703,12 @@ metrics_by_year <- eval_df |>
     .groups = "drop"
   )
 
-write_csv(metrics_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_by_hour.csv")
-write_csv(metrics_by_month, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_by_month.csv")
-write_csv(metrics_by_year, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_by_year.csv")
-
-# ------------------------------------------------------------
-# Gain diagnostics
-# ------------------------------------------------------------
+write_csv(metrics_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_by_hour.csv")
+write_csv(metrics_by_month, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_by_month.csv")
+write_csv(metrics_by_year, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_by_year.csv")
 
 comparison <- eval_df |>
-  filter(model %in% c(MODEL_NAME_BASE, MODEL_NAME_CORRECTED)) |>
+  filter(model %in% c(MODEL_NAME_BASE, MODEL_NAME_RESIDUAL)) |>
   dplyr::select(date, hour, model, abs_error, sq_error) |>
   pivot_wider(
     names_from = model,
@@ -719,24 +718,24 @@ comparison <- eval_df |>
 names(comparison) <- make.names(names(comparison))
 
 abs_base_col <- make.names(paste0("abs_error_", MODEL_NAME_BASE))
-abs_new_col <- make.names(paste0("abs_error_", MODEL_NAME_CORRECTED))
+abs_new_col <- make.names(paste0("abs_error_", MODEL_NAME_RESIDUAL))
 sq_base_col <- make.names(paste0("sq_error_", MODEL_NAME_BASE))
-sq_new_col <- make.names(paste0("sq_error_", MODEL_NAME_CORRECTED))
+sq_new_col <- make.names(paste0("sq_error_", MODEL_NAME_RESIDUAL))
 
 comparison <- comparison |>
   mutate(
-    mae_gain_from_adaptive_correction = .data[[abs_base_col]] - .data[[abs_new_col]],
-    mse_gain_from_adaptive_correction = .data[[sq_base_col]] - .data[[sq_new_col]]
+    mae_gain_from_residual_step = .data[[abs_base_col]] - .data[[abs_new_col]],
+    mse_gain_from_residual_step = .data[[sq_base_col]] - .data[[sq_new_col]]
   )
 
 gain_overall <- comparison |>
   summarise(
-    mae_gain_from_adaptive_correction = mean(
-      mae_gain_from_adaptive_correction,
+    mae_gain_from_residual_step = mean(
+      mae_gain_from_residual_step,
       na.rm = TRUE
     ),
-    mse_gain_from_adaptive_correction = mean(
-      mse_gain_from_adaptive_correction,
+    mse_gain_from_residual_step = mean(
+      mse_gain_from_residual_step,
       na.rm = TRUE
     )
   )
@@ -744,12 +743,12 @@ gain_overall <- comparison |>
 gain_by_hour <- comparison |>
   group_by(hour) |>
   summarise(
-    mae_gain_from_adaptive_correction = mean(
-      mae_gain_from_adaptive_correction,
+    mae_gain_from_residual_step = mean(
+      mae_gain_from_residual_step,
       na.rm = TRUE
     ),
-    mse_gain_from_adaptive_correction = mean(
-      mse_gain_from_adaptive_correction,
+    mse_gain_from_residual_step = mean(
+      mse_gain_from_residual_step,
       na.rm = TRUE
     ),
     .groups = "drop"
@@ -757,25 +756,25 @@ gain_by_hour <- comparison |>
 
 print(gain_overall)
 
-write_csv(gain_overall, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_gain_overall.csv")
-write_csv(gain_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_gain_by_hour.csv")
+write_csv(gain_overall, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_gain_overall.csv")
+write_csv(gain_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_gain_by_hour.csv")
 
 correction_df <- as_tibble(correction_mat) |>
   mutate(date = dates[test_idx], .before = 1)
 
 write_csv(
   correction_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_values.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_values.csv"
 )
 
 write_csv(
   feature_track_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_features_used.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_features_used.csv"
 )
 
 write_csv(
   lambda_track_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_selected_lambdas.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_selected_lambdas.csv"
 )
 
 # ------------------------------------------------------------
@@ -793,7 +792,7 @@ p_hour <- metrics_by_hour |>
   )
 
 ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_local_correction_mae_by_hour.png",
+  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_residual_step_mae_by_hour.png",
   p_hour,
   width = 9,
   height = 5
@@ -811,39 +810,35 @@ p_month <- metrics_by_month |>
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_local_correction_mae_by_month.png",
+  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_residual_step_mae_by_month.png",
   p_month,
   width = 10,
   height = 5
 )
 
 p_gain <- gain_by_hour |>
-  ggplot(aes(hour, mae_gain_from_adaptive_correction)) +
+  ggplot(aes(hour, mae_gain_from_residual_step)) +
   geom_hline(yintercept = 0, linetype = "dashed") +
   geom_line(linewidth = 1) +
   labs(
     x = "Hour",
-    y = "MAE gain from adaptive correction",
-    title = "Positive values mean adaptive correction improves the enriched base model"
+    y = "MAE gain from residual second step",
+    title = "Positive values mean the residual second step improves the base model"
   )
 
 ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_local_correction_gain_by_hour.png",
+  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_residual_step_gain_by_hour.png",
   p_gain,
   width = 8,
   height = 4.8
 )
 
-# ------------------------------------------------------------
-# Save result object
-# ------------------------------------------------------------
-
 forecast_objects <- list(
   dates = dates[test_idx],
   hours = hours,
   actual = actual_test,
-  base_holiday_derivative_regime = pred_base,
-  corrected_forecast = pred_corrected,
+  holiday_derivative_regime = pred_base,
+  residual_step_forecast = pred_residual_step,
   seasonal_naive = pred_naive,
   official_forecast = if (has_official) pred_official else NULL,
   correction = correction_mat,
@@ -873,10 +868,10 @@ forecast_objects <- list(
 
 saveRDS(
   forecast_objects,
-  "output/results/fpca_VAR_1_7_holiday_regime_derivative_local_correction_forecast_results.rds"
+  "output/results/fpca_VAR_1_7_holiday_regime_derivative_residual_step_forecast_results.rds"
 )
 
 write_csv(
   eval_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_eval_long.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_eval_long.csv"
 )
