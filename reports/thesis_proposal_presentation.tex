@@ -1,0 +1,288 @@
+\documentclass[10pt,aspectratio=169]{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{dove}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+\usepackage[round,authoryear]{natbib}
+\usepackage{booktabs}
+\usepackage{array}
+
+\title[Functional Load Forecasting]{Thesis Proposal: Functional Forecasting of Turkish Electricity Load Curves}
+\author{Zeynep Bozoklu}
+\institute{\href{https://github.com/zebozoklu/turkey-electricity-fda}{turkey-electricity-fda}}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Research Question}
+  \begin{block}{Main question}
+    Can a functional time-series model improve day-ahead forecasts of Turkish hourly electricity demand relative to the official forecast?
+  \end{block}
+
+  \vspace{0.4em}
+  \begin{itemize}
+    \item The forecasting object is the full 24-hour daily load curve, not only a daily aggregate.
+    \item Functional representation preserves intraday structure: overnight load, morning ramp, daytime peak, and evening decline.
+    \item Forecasts are evaluated against two reference points:
+      \begin{itemize}
+        \item seasonal naive benchmark, \(Y_{d-7}\);
+        \item official day-ahead forecast, \(\widehat Y^{off}_d\).
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Empirical Object}
+  Let \(Y_d(h)\) denote Turkish electricity load on day \(d\), hour \(h=0,\ldots,23\).
+
+  \[
+    Y_d=\{Y_d(h):h=0,\ldots,23\}.
+  \]
+
+  The cleaned daily matrices are
+  \[
+    Y=[Y_d(h)]_{d,h}, \qquad
+    \widehat Y^{off}=[\widehat Y^{off}_d(h)]_{d,h}, \qquad
+    E=[Y_d(h)-\widehat Y^{off}_d(h)]_{d,h}.
+  \]
+
+  \begin{itemize}
+    \item Each retained day has 24 hourly observations.
+    \item Evaluation starts on 2023-01-01.
+    \item The evaluation sample contains \(26{,}304\) hourly observations.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Functional Representation}
+  Each curve is first smoothed with a B-spline basis:
+  \[
+    Y_d(h)\simeq \sum_{m=1}^{M}c_{dm}B_m(h), \qquad M=12.
+  \]
+
+  FPCA then represents daily load curves as
+  \[
+    Y_d(h)=\mu(h)+\sum_{k=1}^{K}\xi_{dk}\phi_k(h)+e_d(h).
+  \]
+
+  The corresponding forecast is
+  \[
+    \widehat Y_d(h)=\widehat\mu(h)+\widehat{\Phi}(h)'\widehat\xi_d,
+    \qquad
+    \xi_d=(\xi_{d1},\ldots,\xi_{dK})'.
+  \]
+\end{frame}
+
+\begin{frame}{Choice of Functional Dimension}
+  The baseline keeps \(K=2\) principal components.
+
+  \vspace{0.4em}
+  \begin{center}
+    \small
+    \begin{tabular}{rrrrr}
+      \toprule
+      FPC & Load var. & Load cum. & Error var. & Error cum.\\
+      \midrule
+      1 & 93.40\% & 93.40\% & 76.60\% & 76.60\%\\
+      2 & 3.89\% & 97.29\% & 12.00\% & 88.60\%\\
+      3 & 1.11\% & 98.40\% & 4.62\% & 93.22\%\\
+      4 & 0.99\% & 99.39\% & 2.88\% & 96.09\%\\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+
+  \begin{itemize}
+    \item The first two load components explain \(97.29\%\) of total functional variation.
+    \item \(K=2\) exceeds the usual 95\% cumulative-variance rule.
+    \item The first component captures daily level; the second captures the dominant intraday shape contrast.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Model-Building Strategy}
+  The proposed model sequence is intentionally incremental.
+
+  \begin{enumerate}
+    \item Reduce each daily load curve to a small vector of FPCA scores.
+    \item Forecast scores using weekly and one-day lagged functional dynamics.
+    \item Add predetermined calendar and ramp variables.
+    \item Add holiday and lagged load-shape variables.
+    \item Add derivative and targeted intraday transition features.
+    \item Treat residual correction as a possible extension, not the baseline claim.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Forecasting Specifications}
+  Benchmarks:
+  \[
+    \widehat Y_d^{SN}(h)=Y_{d-7}(h),
+    \qquad
+    \widehat Y_d^{OFF}(h).
+  \]
+
+  Weekly FPCA VAR:
+  \[
+    \xi_d=a+A_7\xi_{d-7}+u_d.
+  \]
+
+  FPCA VAR(1,7):
+  \[
+    \xi_d=a+A_1\xi_{d-1}+A_7\xi_{d-7}+u_d.
+  \]
+
+  Augmented score model:
+  \[
+    \xi_d=a+A_1\xi_{d-1}+A_7\xi_{d-7}+Bz_d+u_d,
+  \]
+  where \(z_d\) is predetermined at the forecast date.
+\end{frame}
+
+\begin{frame}{Predictor Blocks}
+  The largest predictor vector is
+  \[
+    z_d=\left(z_d^{cal'},z_d^{hol'},z_d^{shape'},z_d^{deriv'}\right)'.
+  \]
+
+  \begin{itemize}
+    \item Calendar controls: weekend indicator and annual seasonality terms.
+    \item Holiday controls: fixed holidays, religious holidays, holiday eves, post-holiday days, near-holiday days, and bridge days.
+    \item Lagged load-shape variables: previous-day mean, peak, minimum, range, and rolling means.
+    \item Ramp variables: morning, evening, and end-of-day load changes.
+    \item Derivative summaries: mean slope, slope volatility, maximum slope, minimum slope, and slope range.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Evaluation Design}
+  All forecasts use a rolling-origin design: for target day \(d\), estimation uses only information dated \(<d\).
+
+  \vspace{0.5em}
+  Forecast errors:
+  \[
+    e_{dh}^{(m)}=Y_d(h)-\widehat Y_d^{(m)}(h).
+  \]
+
+  Accuracy metrics:
+  \[
+    MAE_m=\frac{1}{N}\sum_{d,h}|e_{dh}^{(m)}|,
+    \qquad
+    RMSE_m=
+    \left[
+      \frac{1}{N}\sum_{d,h}(e_{dh}^{(m)})^2
+    \right]^{1/2}.
+  \]
+
+  Gain relative to the official forecast:
+  \[
+    Gain_m^{MAE}=100\frac{MAE_{OFF}-MAE_m}{MAE_{OFF}}.
+  \]
+\end{frame}
+
+\begin{frame}{Preliminary Results}
+  \begin{center}
+    \scriptsize
+    \begin{tabular}{p{0.42\textwidth}rrrr}
+      \toprule
+      Model & MAE & RMSE & MAE gain & RMSE gain\\
+      \midrule
+      Seasonal naive \(Y_{d-7}\) & 1912.46 & 3129.98 & -57.60\% & -79.85\%\\
+      Official forecast & 1213.50 & 1740.30 & 0.00\% & 0.00\%\\
+      FPCA VAR(1,7) scores & 1442.61 & 2018.30 & -18.88\% & -15.97\%\\
+      FPCA VAR(1,7) + ramp/calendar & 1238.37 & 1716.30 & -2.05\% & 1.38\%\\
+      FPCA VAR(1,7) + holiday/load-shape & 1000.62 & 1353.56 & 17.54\% & 22.22\%\\
+      FPCA VAR(1,7) + holiday/load-shape/derivative & \textbf{980.38} & \textbf{1324.40} & \textbf{19.21\%} & \textbf{23.90\%}\\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+
+  \begin{itemize}
+    \item The baseline proposal model improves on the official forecast by \(19.21\%\) in MAE.
+    \item It improves on the official forecast by \(23.90\%\) in RMSE.
+    \item Relative to the weekly seasonal naive benchmark, the MAE reduction is \(48.74\%\).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Parsimony and Robustness}
+  \begin{center}
+    \scriptsize
+    \begin{tabular}{p{0.26\textwidth}ccrrrr}
+      \toprule
+      Specification & \(K\) & Resid. & MAE & RMSE & MAE gain & RMSE gain\\
+      \midrule
+      Holiday/load/derivative & 2 & No & 980.38 & 1324.40 & 19.21\% & 23.90\%\\
+      Holiday/load/derivative & 2 & Yes & 652.90 & 982.60 & 46.20\% & 43.54\%\\
+      Holiday/load/derivative & 4 & No & 800.99 & 1109.69 & 33.99\% & 36.24\%\\
+      Holiday/load/derivative & 4 & Yes & \textbf{640.10} & \textbf{967.82} & \textbf{47.25\%} & \textbf{44.39\%}\\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+
+  \begin{itemize}
+    \item \(K=2\) is the conservative baseline because it is parsimonious and variance-rule motivated.
+    \item \(K=4\) retains additional intraday shape variation and improves no-residual accuracy.
+    \item Residual correction is promising empirically, but requires further methodological justification.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Residual Correction as an Extension}
+  For target day \(d\), fitted residual curves are computed only for days strictly before the target:
+  \[
+    \widehat e_s(h)=Y_s(h)-\widehat Y_s^{base}(h),
+    \qquad s<d.
+  \]
+
+  A correction curve is estimated from past residuals:
+  \[
+    \widehat Y_d^{res}(h)=\widehat Y_d^{base}(h)+\lambda_d\widehat r_d(h).
+  \]
+
+  \begin{itemize}
+    \item The residual regression uses only information dated before \(d\).
+    \item The validation choice of \(\lambda_d\) also uses only pre-\(d\) information.
+    \item This preserves the rolling-origin structure, but the extension is kept separate from the main thesis claim.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Expected Thesis Contribution}
+  \begin{itemize}
+    \item Recast Turkish day-ahead electricity load forecasting as a functional forecasting problem.
+    \item Compare functional forecasts directly with the official day-ahead forecast.
+    \item Quantify the contribution of calendar, holiday, load-shape, ramp, and derivative information.
+    \item Evaluate forecasts under a leakage-aware rolling-origin design.
+    \item Clarify the tradeoff between parsimonious FPCA score models and richer shape-retaining alternatives.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Next Steps}
+  \begin{enumerate}
+    \item Formalize the final baseline specification and robustness checks.
+    \item Decide whether \(K=4\) should remain a robustness check or become part of the main model class.
+    \item Strengthen the methodological justification for residual post-processing.
+    \item Add hour-level diagnostics to show where the functional model improves most.
+    \item Connect forecast gains to economic intuition about intraday demand and system operation.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Selected References}
+  \footnotesize
+  \begin{thebibliography}{99}
+    \bibitem[Kokoszka and Reimherr(2017)]{kokoszka_reimherr_2017}
+    Kokoszka, P. and Reimherr, M. (2017).
+    \newblock \textit{Introduction to Functional Data Analysis}.
+    \newblock CRC Press.
+
+    \bibitem[Xie and Hong(2016)]{xie_hong_2016}
+    Xie, J. and Hong, T. (2016).
+    \newblock GEFCom2014 probabilistic electric load forecasting: An integrated solution with forecast combination and residual simulation.
+    \newblock \textit{International Journal of Forecasting}, 32(3), 1012--1016.
+
+    \bibitem[Wang et al.(2012)]{wang_etal_2012}
+    Wang, Y., Wang, J., Zhao, G. and Dong, Y. (2012).
+    \newblock Application of residual modification approach in seasonal ARIMA for electricity demand forecasting.
+    \newblock \textit{Energy Policy}, 48, 284--294.
+  \end{thebibliography}
+\end{frame}
+
+\end{document}
