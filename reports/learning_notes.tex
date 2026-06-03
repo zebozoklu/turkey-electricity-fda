@@ -1,0 +1,869 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper, left=1in, right=1in, top=1in, bottom=1in]{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{indentfirst}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{8pt}
+
+\definecolor{noteblue}{RGB}{220,235,250}
+\definecolor{noteyellow}{RGB}{255,250,220}
+\definecolor{notegreen}{RGB}{220,245,225}
+
+\newmdenv[backgroundcolor=noteblue, linewidth=0pt, innerleftmargin=10pt,
+          innerrightmargin=10pt, innertopmargin=8pt, innerbottommargin=8pt]{keybox}
+
+\newmdenv[backgroundcolor=noteyellow, linewidth=0pt, innerleftmargin=10pt,
+          innerrightmargin=10pt, innertopmargin=8pt, innerbottommargin=8pt]{intuitionbox}
+
+\newmdenv[backgroundcolor=notegreen, linewidth=0pt, innerleftmargin=10pt,
+          innerrightmargin=10pt, innertopmargin=8pt, innerbottommargin=8pt]{resultbox}
+
+\begin{document}
+
+\begin{center}
+{\LARGE \textbf{How My Thesis Works: A Self-Study Guide}}\\[0.5em]
+{\large From Classical Metrics to Functional Forecasting}\\[0.5em]
+{\normalsize Zeynep Bozoklu \quad --- \quad Personal learning notes}
+\end{center}
+
+\vspace{1em}
+
+These notes explain every concept in my thesis starting from what I already
+know from first-year econometrics. The goal is to be able to explain any
+part of the work clearly and confidently in a seminar or presentation.
+The actual numbers from the results appear throughout so the explanations
+stay grounded.
+
+\tableofcontents
+
+\newpage
+
+% ============================================================
+\section{Why This Problem Matters}
+% ============================================================
+
+Turkey's electricity grid operator needs to forecast how much electricity
+will be consumed in each of the 24 hours of the following day. This is
+called a \textbf{day-ahead load forecast}. Grid operators use these
+forecasts to schedule power plants, manage reserves, and price electricity
+in the wholesale market.
+
+The Turkish operator publishes an official forecast. My research question
+is simple: \textit{can a statistical model do better?}
+
+The answer, for the model I build: yes, by about \textbf{19\% in mean
+absolute error} and \textbf{19\% in mean absolute percentage error}
+relative to the official forecast.
+
+Why might a statistical model beat the official forecast? The official
+forecast is itself the output of a complex proprietary system. But a
+statistical model trained on historical patterns can sometimes learn
+systematic biases or regularities that the official model misses.
+
+% ============================================================
+\section{The Economic Setting}
+% ============================================================
+
+\subsection{Why the load curve has the shape it has}
+
+The 24-hour electricity load curve is a direct imprint of human behavior
+and economic activity. Understanding its shape is essential for explaining
+why the forecasting problem is hard and why the functional data approach
+is natural.
+
+\textbf{Overnight trough (hours 0--5).}
+Most people are asleep. Factories running night shifts are the main
+consumers, along with street lighting and always-on infrastructure
+(servers, refrigeration, pumping stations). Demand is low and stable,
+varying mainly by season (heating in winter, no AC). This is the easiest
+part of the curve to forecast --- weekly seasonality (lag 7) captures most
+of the variation. Our model gains 40--60\% in MAPE over the official
+forecast at these hours.
+
+\textbf{Morning ramp-up (hours 6--8).}
+The single most economically consequential transition in the curve.
+Within two hours, electricity demand roughly doubles. The drivers are:
+residential consumers waking up (lighting, coffee machines, showers),
+commercial buildings switching on HVAC, and industrial facilities
+starting morning shifts. The \emph{timing} of this ramp depends
+critically on temperature: on a hot summer day, air conditioning turns
+on immediately at sunrise; on a mild day, the ramp is gentler.
+This is the one part of the daily curve where our model loses to the
+official forecast (by up to 24\% MAPE at hour 8), almost certainly
+because the official forecast incorporates weather forecasts that
+we do not have access to.
+
+\textbf{Midday plateau (hours 9--16).}
+Industrial and commercial demand is at full intensity.
+This part of the curve is dominated by large consumers ---
+manufacturing, mining, construction --- whose behavior is
+predictable from the day of week and seasonal calendar.
+Our model wins comfortably here (20--35\% MAPE gain),
+suggesting these systematic patterns are well captured by
+holiday indicators, weekend flags, and lagged load-shape features.
+
+\textbf{Evening surge (hours 17--19).}
+The second major transition. Industrial activity begins to wind
+down while residential demand surges: people come home, turn on
+televisions, cook dinner, and in summer run air conditioning at
+maximum. In Turkey this peak coincides with the hottest part of
+the evening in summer and with heating demand in winter. The official
+forecast is worst here: it underpredicts by 614--658 MWh on average
+at hours 17--19, substantially larger than at any other time of day.
+Our model still loses at hours 18--19 but with a much smaller bias.
+
+\textbf{Night wind-down (hours 20--23).}
+Residential demand falls as people go to sleep. Industrial activity
+has mostly stopped. The curve declines smoothly toward the overnight
+trough. Our model wins by 17--20\% MAPE here.
+
+\begin{intuitionbox}
+\textbf{Why this matters for FDA:} the daily load curve is not 24
+independent numbers --- it is a single coherent trajectory shaped
+by overlapping behavioral rhythms. The morning ramp, midday plateau,
+and evening peak are features of the \emph{whole curve}, not of
+individual hours. Modeling the curve as a functional object rather
+than a vector of 24 hourly values lets us directly work with these
+shape features (via FPCA components and derivative summaries) instead
+of treating each hour in isolation.
+\end{intuitionbox}
+
+\subsection{Turkey's electricity market: who uses these forecasts}
+
+Turkey liberalised its electricity market through a series of reforms
+from 2001 to 2013. The key institutions are:
+
+\textbf{TEİAŞ} (Türkiye Elektrik İletim A.Ş.) --- the transmission
+system operator (TSO). It owns and operates the high-voltage grid and is
+responsible for system balance: at every moment, generation must equal
+consumption. TEİAŞ publishes the official day-ahead load forecast, which
+is the benchmark in this thesis.
+
+\textbf{EPIAS} (Enerji Piyasaları İşletme A.Ş.) --- the energy exchange
+that operates the day-ahead market (DAM) and intraday market. The DAM
+clears at noon the day before delivery, with generators and retailers
+submitting hourly bids and offers.
+
+\textbf{Generators} submit supply bids for each hour of the following
+day. The clearing price depends on the demand they expect: if demand is
+forecast to be high in the evening, peaking plants will be called on,
+driving up prices. Generators with better demand forecasts can time their
+bids more strategically --- bidding higher when they know demand will be
+tight, and backing off when it will be slack.
+
+\textbf{Retailers and large industrial consumers} submit demand bids and
+purchase power at DAM prices. A large factory with a better load
+forecast of its own consumption faces smaller imbalance penalties in the
+real-time balancing market. Inaccurate internal forecasts expose them to
+buying expensive balancing power.
+
+\textbf{The TSO's role in scheduling:} TEİAŞ uses its load forecast to
+run \emph{unit commitment} --- deciding which power plants to start up
+and keep running. Starting a thermal plant (coal, gas) takes hours and
+has significant startup costs. A 19\% better forecast means TEİAŞ can
+commit capacity more efficiently: fewer unnecessary startups and fewer
+costly real-time reserve activations.
+
+\begin{keybox}
+\textbf{The economic value of better forecasting.} A 1\% improvement
+in MAPE is estimated to reduce balancing costs by millions of euros
+per year in medium-sized European electricity markets (Bunn \&
+Karakatsani, 2003). Turkey's electricity consumption is around
+350 TWh/year and growing. Our 18.7\% MAPE improvement, if used
+operationally, could represent substantial savings in reserve procurement
+and balancing costs --- the exact amount would require knowledge of
+Turkey's balancing market prices, but the order of magnitude is
+economically meaningful.
+\end{keybox}
+
+\subsection{The systematic underprediction puzzle}
+
+The official forecast underpredicts actual consumption at every single
+hour of the day, every year in the evaluation period. The numbers:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Year & Official bias (MWh) & Main model bias (MWh) \\
+\midrule
+2023 & $+344$ & $+176$ \\
+2024 & $+585$ & $+34$  \\
+2025 & $+472$ & $+98$  \\
+\midrule
+Average & $+467$ & $+103$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\emph{Positive bias means actual $>$ forecast, i.e., the forecast
+is systematically too low.}
+
+Three observations stand out:
+
+\begin{enumerate}
+\item The underprediction worsens in 2024 (+585 MWh) before
+  partially recovering in 2025. This coincides with an exceptionally
+  hot summer in Turkey in 2024 driving unusually high air conditioning
+  demand --- a shock the official model apparently did not absorb.
+
+\item The underprediction is largest at evening hours (17--20),
+  with a bias of 614--658 MWh. This is the residential demand surge
+  that is hardest to predict from institutional/commercial patterns alone.
+
+\item Our model's bias is much smaller (34 MWh in 2024, essentially
+  zero) because the rolling-origin design continuously re-trains on the
+  most recent data. As Turkish demand grew in 2024, our model adapted
+  automatically.
+\end{enumerate}
+
+\subsection{Economic incentives and agent behavior}
+
+Why would the official forecaster persistently underpredict?
+Several mechanisms from the economics of forecasting apply here.
+
+\textbf{Asymmetric loss functions.}
+If the TSO faces asymmetric costs --- over-procurement of capacity
+(scheduling too many plants and leaving them idle) is more politically
+or contractually costly than under-procurement (buying expensive
+real-time reserves) --- then rational forecast optimisation under
+asymmetric loss produces a downward-biased forecast. This is a
+well-known result: when the loss from over-forecasting exceeds the
+loss from under-forecasting, the optimal point forecast is below the
+conditional mean.
+
+\textbf{Incentive to understate demand growth.}
+A TSO that continuously reports ``demand exceeded forecast'' may face
+less scrutiny than one that ``wasted money on excess capacity.''
+Politically, underpredicting and then being surprised by demand
+growth can be framed as evidence of a strong economy. Overpredicting
+and having idle power plants on contract is visible and costly in a
+different way.
+
+\textbf{Model staleness.}
+Official forecasting models at large institutions are updated
+infrequently --- they require regulatory approval, internal audits,
+and systems integration. A model calibrated on 2015--2019 consumption
+data will systematically underpredict 2023--2025 demand if Turkish
+electricity use has been structurally growing due to industrial
+expansion, rising living standards, and increased AC adoption.
+Our rolling-origin estimator automatically incorporates the most
+recent data at each step, which is why our 2024 bias is only 34 MWh
+while the official is 585 MWh.
+
+\textbf{Ramadan and religious holiday complexity.}
+Ramadan shifts the entire daily demand pattern: iftar (breaking fast
+at sunset) creates a massive spike at what would otherwise be a
+declining evening demand, and the overnight hours see much higher
+consumption as people are awake eating, socialising, and praying.
+The timing of Ramadan shifts by roughly 10--11 days per year
+relative to the Gregorian calendar. An official model that does not
+correctly track Ramadan will generate systematic errors that
+persist for the entire month. Our model includes explicit Ramadan
+and Bayram indicators constructed year by year.
+
+\textbf{Generator strategic behavior.}
+Beyond the TSO, generators themselves have incentives to shade
+their demand forecasts when submitting market bids. If a generator
+believes demand will be high (tight supply), bidding a high price
+is rational. But if all generators believe this and bid high, the
+clearing price spikes. There is a strategic complementarity:
+generators want to know what others forecast, not just what actual
+demand will be. The TSO's official forecast acts as a coordination
+device --- generators shade their bids relative to it, which may
+create feedback dynamics in the market that make the official
+forecast act as a focal point rather than an accurate estimate.
+
+\begin{intuitionbox}
+\textbf{For the thesis presentation:} when an audience member asks
+``why does the official forecast underpredict?'', the honest answer
+is: we do not know for certain, but the data is consistent with
+(a) model staleness in a period of growing demand, (b) asymmetric
+institutional loss functions favouring under-procurement, and (c)
+the official model not fully capturing Ramadan dynamics. The growing
+gap in 2024 is most naturally explained by the model not adapting
+to a structural demand increase compounded by an unusually hot summer.
+\end{intuitionbox}
+
+% ============================================================
+\section{What Is Different About This Data}
+% ============================================================
+
+The raw data is hourly electricity consumption in MWh for each day from
+2019 to 2025. The natural object is a \textbf{daily load curve}: for
+each day $d$, we observe 24 numbers $Y_d(0), Y_d(1), \ldots, Y_d(23)$.
+
+\begin{intuitionbox}
+\textbf{The key observation:} these 24 numbers are not 24 independent
+measurements. They are all part of the same daily demand curve ---
+overnight is low, mornings rise steeply, afternoons plateau, evenings
+surge again. Treating them as 24 separate forecasting problems throws
+away all of this shape information.
+\end{intuitionbox}
+
+The shape itself is economically meaningful. Two days can have the same
+\emph{average} consumption but very different \emph{shapes}: one might
+have a sharp morning peak while another has a flat profile. An air
+conditioning shock raises the afternoon level but not the overnight level.
+A Ramadan period flattens the morning ramp and shifts demand to night.
+
+\textbf{Functional Data Analysis (FDA)} is the branch of statistics that
+treats each day's 24-hour sequence as a single mathematical object --- a
+\emph{curve} --- rather than a vector of 24 numbers. This preserves the
+shape information.
+
+% ============================================================
+\section{Representing the Curve: B-splines}
+% ============================================================
+
+Before doing anything statistical, we need to represent the daily curve
+mathematically. We use a \textbf{B-spline basis}.
+
+Think of it this way. A polynomial approximation says: represent any
+smooth function $f(h)$ as $\sum_{m=0}^{M} c_m h^m$. This works but
+has numerical problems with high-degree polynomials.
+
+B-splines are a better version: piecewise polynomials that are smooth
+at the joins. We choose $M = 12$ basis functions $B_1(h), \ldots, B_{12}(h)$
+over the 24-hour domain. Then:
+\[
+Y_d(h) \approx \sum_{m=1}^{12} c_{dm} B_m(h)
+\]
+where the 12 coefficients $c_{d1}, \ldots, c_{d,12}$ are chosen to fit
+the 24 hourly observations for day $d$. The basis functions $B_m(h)$ are
+fixed; what changes across days are the coefficients.
+
+\begin{keybox}
+\textbf{What this buys us:} instead of working with a jagged sequence of
+24 numbers, we work with a smooth curve. We can take its derivative
+(useful later), integrate it, and apply the tools of functional analysis.
+The 12 basis coefficients represent the curve accurately because a
+smooth daily load curve does not need more than 12 degrees of freedom.
+\end{keybox}
+
+% ============================================================
+\section{Functional PCA: Compressing the Curves}
+% ============================================================
+
+\subsection{Starting from classical PCA}
+
+You likely know classical PCA. Suppose you have $n$ observations of a
+$p$-dimensional vector $x_i \in \mathbb{R}^p$. PCA finds the directions
+of maximum variance: the first principal component $\phi_1$ is the
+direction that explains the most variance in $\{x_i\}$. The score
+$\xi_{i1} = x_i' \phi_1$ is how far observation $i$ projects onto $\phi_1$.
+
+The decomposition is:
+\[
+x_i = \mu + \xi_{i1}\phi_1 + \xi_{i2}\phi_2 + \cdots + \xi_{ip}\phi_p
+\]
+If the first $K$ components explain most of the variance, we can
+approximate $x_i \approx \mu + \sum_{k=1}^K \xi_{ik}\phi_k$.
+
+\subsection{The functional version}
+
+\textbf{Functional PCA (FPCA)} does exactly the same thing but the
+``observations'' are curves $Y_d(\cdot)$ instead of vectors. The
+``directions'' are functions $\phi_k(\cdot)$ called
+\textbf{eigenfunctions} (or functional principal components). The
+``scores'' $\xi_{dk}$ are scalars, exactly as in classical PCA.
+
+The decomposition is:
+\[
+Y_d(h) = \mu(h) + \sum_{k=1}^{K} \xi_{dk}\,\phi_k(h) + \varepsilon_d(h)
+\]
+where $\mu(h)$ is the mean curve, $\phi_k(h)$ is the $k$-th
+eigenfunction (a 24-hour function), and $\xi_{dk}$ is the score for
+day $d$ on component $k$.
+
+\begin{intuitionbox}
+\textbf{What do the eigenfunctions look like in this data?}
+
+\textbf{FPC 1} (explains 93.4\% of variance): essentially the
+``level'' component. Its shape is nearly flat across all 24 hours.
+A high $\xi_{d1}$ means day $d$ has uniformly high consumption.
+A low $\xi_{d1}$ means uniformly low. Think of it as ``how much
+electricity was used today overall.''
+
+\textbf{FPC 2} (explains 3.9\% of variance): the ``shape contrast''
+component. Its eigenfunction is positive in the morning and evening
+and negative or flat at midday. A high $\xi_{d2}$ means the
+morning/evening peaks are pronounced relative to the midday level.
+A low $\xi_{d2}$ means a flatter profile (more typical of summer
+when air conditioning smooths the curve).
+\end{intuitionbox}
+
+Together, two components explain 97.3\% of the total variation across
+all 1,096 daily curves. This is the key compression: instead of
+forecasting 24 numbers, we need to forecast only 2 numbers per day ---
+the two FPCA scores $(\xi_{d1}, \xi_{d2})$.
+
+\subsection{Why K = 2?}
+
+The choice $K=2$ follows the standard ``95\% cumulative variance'' rule.
+Components 3 and 4 explain only 1.1\% and 1.0\% respectively. Including
+them would add parameters to the forecasting model without meaningfully
+improving the functional representation. Parsimony wins.
+
+% ============================================================
+\section{Forecasting the Scores: VAR(1,7)}
+% ============================================================
+
+\subsection{The forecasting problem after FPCA}
+
+After FPCA, the forecasting problem becomes: given the score history
+$\{\xi_{d'k} : d' < d\}$ and predetermined features $z_d$, predict
+$(\xi_{d1}, \xi_{d2})$ for tomorrow.
+
+This is a standard multivariate time series problem.
+
+\subsection{Vector Autoregression}
+
+A \textbf{VAR} (Vector AutoRegression) is the multivariate extension of
+an AR model. If you know AR(1): $y_t = a + \beta y_{t-1} + u_t$.
+A VAR(1) with $K=2$ variables is:
+\[
+\begin{pmatrix} \xi_{d1} \\ \xi_{d2} \end{pmatrix}
+= a + A_1 \begin{pmatrix} \xi_{d-1,1} \\ \xi_{d-1,2} \end{pmatrix} + u_d
+\]
+where $A_1$ is a $2 \times 2$ matrix of coefficients. The VAR allows
+score 1 to depend on yesterday's score 2, and vice versa.
+
+\subsection{Why lags 1 and 7?}
+
+Electricity demand has a strong \textbf{weekly seasonality}: Monday
+demand resembles last Monday's, weekends resemble previous weekends.
+So we include both lag 1 (yesterday) and lag 7 (same weekday last week):
+\[
+\xi_d = a + A_1\xi_{d-1} + A_7\xi_{d-7} + u_d
+\]
+This is the FPCA VAR(1,7) --- the core dynamic model. It is
+estimated by OLS equation by equation, which is efficient when the
+same regressors appear in each equation.
+
+\subsection{Adding external features}
+
+The VAR alone explains the \emph{dynamics} of scores but ignores
+known structure: weekends have different demand than weekdays,
+public holidays cause sharp drops, Ramadan shifts demand to night,
+summer school breaks change the daytime pattern.
+
+We add a vector $z_d$ of predetermined features:
+\[
+\xi_d = a + A_1\xi_{d-1} + A_7\xi_{d-7} + Bz_d + u_d
+\]
+The features $z_d$ include:
+\begin{itemize}[nosep]
+  \item \textbf{Calendar:} weekend indicator, day-of-year sine/cosine,
+    summer school break indicator
+  \item \textbf{Holiday:} fixed holidays, Ramadan and Bayram periods,
+    holiday eve, post-holiday, bridge-day indicators
+  \item \textbf{Load shape:} yesterday's mean, peak, range, rolling
+    7-day and 28-day averages
+  \item \textbf{Derivative features:} morning ramp, evening ramp,
+    end-of-day drop from the \emph{smoothed derivative} of yesterday's curve
+\end{itemize}
+
+The derivative features deserve special mention. The derivative
+$DY_{d-1}(h) = \frac{d}{dh}Y_{d-1}(h)$ measures how fast the
+load curve was changing at each hour yesterday. A steep positive
+derivative at hour 6--8 means a sharp morning ramp-up. We summarise
+this by the standard deviation, maximum, minimum, and range of the
+derivative, plus targeted ramps at specific transition hours. These
+capture yesterday's \emph{slope behavior} in addition to its level.
+
+\begin{keybox}
+\textbf{Implementation note:} all features in $z_d$ are
+\emph{predetermined} --- they are computed from data strictly before
+day $d$. There is no look-ahead. This is essential for the evaluation
+to be honest.
+\end{keybox}
+
+% ============================================================
+\section{Rolling-Origin Evaluation}
+% ============================================================
+
+\subsection{The key principle}
+
+Evaluating a forecasting model is different from evaluating a
+regression model. In regression, we split data randomly into train
+and test sets. In forecasting, the past must precede the future ---
+we cannot train on 2024 data to forecast 2022.
+
+\textbf{Rolling-origin evaluation} (also called walk-forward
+cross-validation) mimics how the model would be used in practice:
+
+\begin{enumerate}[nosep]
+  \item Set a test start date: January 1, 2023.
+  \item For each day $d$ from Jan 1 2023 to Dec 31 2025 (1,096 days):
+    \begin{itemize}[nosep]
+      \item Estimate FPCA on all data strictly before $d$
+      \item Estimate the score VAR on all data strictly before $d$
+      \item Produce a one-day-ahead forecast for day $d$
+      \item Record the forecast error
+    \end{itemize}
+  \item Evaluate across all 1,096 test days.
+\end{enumerate}
+
+This design ensures \textbf{no information leakage}: the model at each
+step has access only to the information that would be available in real
+time. The FPCA eigenfunctions themselves are re-estimated at every step
+as the training window grows.
+
+\subsection{Expanding vs sliding window}
+
+We use an \textbf{expanding window}: training always uses all available
+past data. An alternative would be a sliding window (only the last $N$
+days). Expanding windows are standard when data is non-stationary but
+the long-run structure (eigenfunctions, calendar patterns) is stable.
+We verified that the FPCA eigenfunctions are stable across sub-periods
+--- inner products between 2019--2021 and 2022--2024 eigenfunctions
+exceed 0.99 --- so the expanding window is appropriate.
+
+% ============================================================
+\section{Evaluation Metrics}
+% ============================================================
+
+\subsection{The three metrics}
+
+For each model $m$ and each (day, hour) pair $(d,h)$, the forecast
+error is $e_{dh}^{(m)} = Y_d(h) - \hat{Y}_d^{(m)}(h)$.
+
+\[
+\text{MAE}_m = \frac{1}{N}\sum_{d,h} |e_{dh}^{(m)}|
+\]
+\[
+\text{RMSE}_m = \sqrt{\frac{1}{N}\sum_{d,h} (e_{dh}^{(m)})^2}
+\]
+\[
+\text{MAPE}_m = \frac{1}{N}\sum_{d,h} \frac{|e_{dh}^{(m)}|}{Y_d(h)} \times 100
+\]
+
+\textbf{MAE} is the average absolute error in MWh. Directly
+interpretable in the units of the problem.
+
+\textbf{RMSE} penalises large errors more (because of the square).
+If grid operators care especially about avoiding large misses on peak
+days, RMSE is the more relevant metric. Note that OLS minimises RMSE
+in-sample, so RMSE is also the ``coherent'' metric for OLS.
+
+\textbf{MAPE} is percentage error. It is scale-free, which matters
+when comparing across years: if Turkish electricity demand grows 5\%
+between 2023 and 2025, a fixed MAE threshold becomes harder to beat
+in later years. MAPE adjusts for this. In the electricity load
+forecasting literature, MAPE is the most commonly reported metric.
+
+\subsection{Relative gain vs the official forecast}
+
+We also report the \textbf{gain} relative to the official forecast:
+\[
+\text{MAE gain}_m = 100 \cdot \frac{\text{MAE}_{\text{off}} - \text{MAE}_m}{\text{MAE}_{\text{off}}}
+\]
+Positive gain = model $m$ beats the official forecast. Negative gain =
+model $m$ is worse.
+
+\subsection{The results}
+
+\begin{center}
+\begin{tabular}{lrrrrrr}
+\toprule
+Model & MAE & RMSE & MAPE & MAE gain & RMSE gain & MAPE gain \\
+\midrule
+Seasonal naive $Y_{d-7}$ & 1912 & 3130 & 5.13\% & $-57.6\%$ & $-79.8\%$ & $-62.9\%$ \\
+Official forecast         & 1214 & 1740 & 3.15\% & 0\% & 0\% & 0\% \\
+FPCA VAR(1,7) scores only & 1443 & 2018 & 3.76\% & $-18.9\%$ & $-16.0\%$ & $-19.4\%$ \\
+$+$ ramp/calendar         & 1238 & 1716 & 3.26\% & $-2.1\%$ & $+1.4\%$ & $-3.7\%$ \\
+$+$ holiday/load regime   & 1001 & 1354 & 2.63\% & $+17.5\%$ & $+22.2\%$ & $+16.5\%$ \\
+$+$ derivative features   & \textbf{980} & \textbf{1324} & \textbf{2.56\%} & $+19.2\%$ & $+23.9\%$ & $+18.7\%$ \\
+$+$ residual step         & 653 & 983 & 1.70\% & $+46.2\%$ & $+43.5\%$ & $+46.0\%$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{intuitionbox}
+\textbf{Reading the table:} the model-building path shows each
+addition. FPCA VAR(1,7) alone is \emph{worse} than the official
+forecast --- the pure dynamics without any calendar information are
+not enough. The ramp/calendar model barely helps. The big jump
+happens when we add holiday and load-shape information: MAE drops
+from 1238 to 1001. Derivative features add a further push to 980.
+\end{intuitionbox}
+
+% ============================================================
+\section{Why Comparing MAE Numbers Is Not Enough: The DM Test}
+% ============================================================
+
+\subsection{The problem with just looking at numbers}
+
+Suppose model A has MAE = 980 and model B has MAE = 990. Model A
+looks better. But is this difference real, or could it arise from
+random variation in the 1,096-day test period?
+
+This is a standard statistical question: we need a hypothesis test.
+
+\subsection{The Diebold-Mariano test}
+
+The \textbf{Diebold-Mariano (DM) test} (Diebold \& Mariano, 1995)
+answers exactly this question. Here is the logic:
+
+Define the \textbf{loss differential} for each observation $t$:
+\[
+d_t = |e_t^{(\text{challenger})}| - |e_t^{(\text{official})}|
+\]
+If $d_t < 0$, the challenger won on observation $t$. If $d_t > 0$, the
+official won. The null hypothesis is $\mathbb{E}[d_t] = 0$ (equal
+expected loss). The alternative is $\mathbb{E}[d_t] < 0$ (challenger
+has lower expected loss).
+
+The DM statistic is essentially a $t$-test on $\bar{d}$, the sample
+mean of the loss differentials, with a heteroskedasticity-and-autocorrelation
+consistent (HAC) variance estimate. We use the Harvey, Leybourne \&
+Newbold (1997) small-sample correction.
+
+\begin{keybox}
+\textbf{Connection to what you know:} the DM test is a $t$-test on
+the time-series mean of $d_t$, using a long-run variance estimator
+(like a Newey-West standard error in your metrics courses). It
+accounts for serial correlation in the errors, which matters because
+consecutive forecast errors tend to be correlated.
+\end{keybox}
+
+\subsection{The results}
+
+\begin{center}
+\begin{tabular}{lrrll}
+\toprule
+Challenger & $\bar{d}$ (MWh) & DM stat & $p$-value & Beats official? \\
+\midrule
+FPCA VAR(1,7) scores only & $+229$ & $+22.9$ & $\approx 1$ & No --- significantly worse \\
+$+$ ramp/calendar         & $+25$  & $+2.6$  & $0.996$    & No \\
+$+$ holiday/load regime   & $-213$ & $-24.9$ & $10^{-135}$ & Yes, $p < 0.001$ \\
+$+$ derivative features   & $-233$ & $-27.4$ & $10^{-163}$ & Yes, $p < 0.001$ \\
+$+$ residual step         & $-561$ & $-71.2$ & $\approx 0$ & Yes, dominant \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The $p$-value of $10^{-163}$ for the main model means the probability
+of observing this large an improvement by chance, if both models were
+truly equal, is essentially zero.
+
+We also run the DM test \textbf{hour by hour} (24 separate tests).
+The main model beats the official forecast at 19 of 24 hours, and
+the difference is statistically significant (5\% level) at 18 of 24.
+
+The 5 hours where the official forecast wins are hours 6, 7, 8
+(morning ramp-up) and 18, 19 (evening surge). These are the
+transition hours where the load curve changes fastest. At hour 8,
+the MAPE loss is $-24\%$ --- the official is 24\% more accurate.
+This is likely because the official forecast incorporates temperature
+and weather information that determines the \emph{timing} of the
+ramp; our model uses only historical load patterns.
+
+% ============================================================
+\section{ACF Diagnostics: Are the Errors Random?}
+% ============================================================
+
+\subsection{What the ACF measures}
+
+After fitting any model, we ask: are the residuals white noise?
+If errors follow a systematic pattern, the model has missed something
+that could in principle be captured.
+
+The \textbf{autocorrelation function (ACF)} measures:
+\[
+\rho_k = \text{Corr}(e_t, e_{t-k})
+\]
+the correlation between today's error and the error $k$ days ago.
+If the model is correctly specified, all $\rho_k$ should be near zero.
+
+The \textbf{Ljung-Box test} is a formal test of:
+$H_0: \rho_1 = \rho_2 = \cdots = \rho_{14} = 0$ (no autocorrelation
+up to lag 14). Rejection means remaining serial structure.
+
+\subsection{What we find}
+
+\textbf{VAR score residuals (in-sample):} fitting the pure VAR(1,7)
+without external features on the 2019--2022 training data, the
+Ljung-Box statistic is 504 for Score 1 and 553 for Score 2 (both
+$p = 0$). This means the scores have remaining autocorrelation
+beyond lags 1 and 7 --- which is expected, because holidays and
+seasonality create systematic patterns in the scores that the VAR
+without features cannot capture. This is the \emph{motivation} for
+adding external features.
+
+\textbf{Curve forecast errors (out-of-sample):} for the full main
+model with all features, the Ljung-Box statistic at each of the 24
+hours ranges from 197 to 7,227, all with $p = 0$. This means
+even the best model leaves strongly autocorrelated errors.
+
+\begin{intuitionbox}
+\textbf{Why are the out-of-sample errors so autocorrelated?}
+Look at the distribution across hours. Hour 6 has LB = 7,227.
+This is the morning ramp start. The model systematically
+over-forecasts or under-forecasts the ramp timing for consecutive
+days --- during Ramadan the ramp shifts to a different pattern and
+persists for weeks; during summer the ramp is shallower and this
+also persists. These regime patterns create serial dependence in
+errors that cannot be removed by lagged features alone.
+\end{intuitionbox}
+
+\subsection{Why this matters: the residual step}
+
+The key insight is: \emph{if errors are predictable, we can correct
+for them}. The \textbf{residual second step} does exactly this.
+For target day $d$, after producing the base forecast $\hat{Y}_d^{base}(h)$:
+
+\begin{enumerate}[nosep]
+  \item Compute past fitted residuals: $\hat{e}_s(h) = Y_s(h) - \hat{Y}_s^{base}(h)$
+    for all $s < d$ (strictly past data only).
+  \item Estimate a correction curve $\hat{r}_d(h)$ from recent past residuals.
+  \item Apply the correction: $\hat{Y}_d^{res}(h) = \hat{Y}_d^{base}(h) + \lambda_d \hat{r}_d(h)$
+    where $\lambda_d$ is chosen by rolling-origin cross-validation.
+\end{enumerate}
+
+This is rolling-origin throughout: no information leakage. The
+massive error autocorrelation --- especially at ramp hours --- is
+exactly what the residual step leverages. It wins at all 24 of 24
+hours including the 5 hours where the base model loses to the official forecast.
+
+% ============================================================
+\section{Eigenfunction Stability and Dynamic FPCA}
+% ============================================================
+
+A natural question about FPCA is: do the eigenfunctions $\phi_1, \phi_2$
+remain stable over time, or do they shift as the Turkish grid evolves?
+If they shift, we might need \textbf{dynamic FPCA} --- a more complex
+method that allows time-varying eigenfunctions.
+
+We tested this directly:
+
+\begin{enumerate}[nosep]
+  \item Fit FPCA separately on three sub-periods: 2019--2021, 2020--2022, 2022--2024.
+  \item Compute the \textbf{inner product} between eigenfunctions from
+    different periods. An inner product of 1 means identical shape;
+    0 means orthogonal (completely rotated).
+\end{enumerate}
+
+Results: all pairwise inner products exceed 0.993. The variance
+proportion explained by FPC1 stays between 92.4\% and 93.2\%
+across all sub-periods. The eigenfunctions are stable.
+
+\begin{resultbox}
+\textbf{Conclusion:} dynamic FPCA is not needed for this dataset.
+Turkish electricity load shapes --- the overnight trough, morning
+ramp, midday plateau, evening peak --- have not structurally changed
+over 2019--2024. Static FPCA is appropriate, and we can say so with
+empirical evidence rather than just assumption.
+\end{resultbox}
+
+% ============================================================
+\section{The Random Forest Benchmark}
+% ============================================================
+
+\subsection{Why a machine learning comparison?}
+
+The score regression in the main model is linear OLS:
+$\xi_d = a + A_1\xi_{d-1} + A_7\xi_{d-7} + Bz_d + u_d$.
+
+A natural question: does the relationship between the features $z_d$
+and the scores $\xi_d$ have nonlinear structure that OLS misses?
+
+\textbf{Random forest (RF)} answers this. RF on the same feature
+vector $z_d$ plus lagged scores can capture any smooth nonlinear
+function of the inputs without specifying the functional form.
+
+\subsection{Why keep the FPCA structure}
+
+We apply RF to the \emph{score regression} only --- we still use FPCA
+to represent the curves and reconstruct the forecast curve from
+predicted scores. This keeps the functional data analysis framework
+intact. The RF is a drop-in replacement for OLS, not an alternative to FPCA.
+
+\subsection{What the comparison tells us}
+
+\begin{itemize}[nosep]
+  \item If \textbf{FPCA-OLS $\approx$ FPCA-RF}: the linear score equation
+    is adequate. We get the same accuracy with a structured, interpretable
+    model. This is the preferred outcome for the thesis's FDA identity.
+  \item If \textbf{FPCA-RF $\gg$ FPCA-OLS}: there is meaningful nonlinearity
+    in the feature-score relationship. This motivates a future extension but
+    does not invalidate the current results.
+\end{itemize}
+
+[Results to be added after the RF computation completes.]
+
+% ============================================================
+\section{The Coherent Narrative}
+% ============================================================
+
+Here is the full story in one flow:
+
+\begin{enumerate}
+  \item \textbf{The object:} daily electricity consumption is a curve, not
+    a vector. Treating it as a curve preserves intraday shape.
+
+  \item \textbf{The compression:} FPCA reduces 24 correlated observations
+    to 2 uncorrelated scores that explain 97.3\% of curve variation.
+    The eigenfunctions are empirically stable over 6 years.
+
+  \item \textbf{The dynamics:} scores follow a VAR(1,7) with calendar,
+    holiday, load-shape, and derivative features. The features are
+    essential: without them, the model is worse than the official forecast.
+
+  \item \textbf{The gain:} the main model (K=2, all features) beats the
+    official forecast by 19.2\% MAE and 18.7\% MAPE, with a
+    Diebold-Mariano p-value of $10^{-163}$. The improvement is real.
+
+  \item \textbf{Where it loses:} transition hours (6--8, 18--19) where
+    the official forecast's weather information gives it an edge. The
+    DM test shows this explicitly.
+
+  \item \textbf{The residual step:} ACF diagnostics show that errors are
+    strongly autocorrelated, especially at transition hours. The
+    residual step exploits this predictable pattern and achieves 46\%
+    MAE gain --- winning at all 24 of 24 hours.
+
+  \item \textbf{The benchmark:} random forest on the same features tests
+    whether OLS leaves nonlinearity on the table. [Result pending.]
+
+  \item \textbf{Statistical validity:} rolling-origin evaluation ensures
+    no leakage. DM tests confirm the gains are statistically significant.
+    ACF diagnostics characterise the remaining structure.
+\end{enumerate}
+
+% ============================================================
+\section{Concepts to Know Cold for the Presentation}
+% ============================================================
+
+\begin{tabular}{p{0.25\textwidth}p{0.65\textwidth}}
+\toprule
+\textbf{Term} & \textbf{One-sentence explanation} \\
+\midrule
+B-spline & Piecewise polynomial basis for approximating smooth functions \\
+FPCA & PCA applied to curves; gives eigenfunctions and daily scores \\
+Score & The projection of a curve onto an eigenfunction; a scalar \\
+Eigenfunction & The ``principal component'' in function space; a 24-hour curve \\
+VAR(1,7) & Multivariate AR with lags 1 and 7; estimated by OLS equation by equation \\
+Rolling-origin & Forecasting analogue of cross-validation; train only on strictly past data \\
+MAE & Mean absolute error in MWh; primary accuracy metric \\
+MAPE & Mean absolute percentage error; scale-free version of MAE \\
+RMSE & Root mean squared error; penalises large errors more \\
+DM test & Hypothesis test for equal forecast accuracy; $t$-test on loss differential \\
+ACF & Autocorrelation function; measures serial dependence in residuals \\
+Ljung-Box & Portmanteau test: are ACFs jointly zero up to lag $q$? \\
+Residual step & Second-stage correction using past errors; exploits error autocorrelation \\
+Expanding window & Training set grows as new data arrives; appropriate when structure is stable \\
+Inner product & Cosine similarity between two eigenfunctions; 1 = identical, 0 = orthogonal \\
+\bottomrule
+\end{tabular}
+
+\end{document}
