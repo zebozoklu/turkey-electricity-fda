@@ -39,11 +39,8 @@ eval_files <- list(
   "output/tables/simple_fpca_weekly_eval_long.csv",
   "output/tables/fpca_VAR_1_7_TLF_regime_eval_long.csv",
   "output/tables/fpca_VAR_1_7_ramp_calendar_eval_long.csv",
-  "output/tables/fpca_VAR_1_7_ramp_calendar_local_correction_eval_long.csv",
   "output/tables/fpca_VAR_1_7_holiday_regime_eval_long.csv",
-  "output/tables/fpca_VAR_1_7_holiday_regime_local_correction_eval_long.csv",
   "output/tables/fpca_VAR_1_7_holiday_regime_derivative_eval_long.csv",
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_local_correction_eval_long.csv",
   "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_eval_long.csv"
 )
 
