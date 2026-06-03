@@ -146,3 +146,148 @@ cat("\nHours with significant autocorrelation (5%):",
     sum(lb_by_hour$reject_5pct), "of 24\n")
 
 cat("\nDone.\n")
+
+# ============================================================
+# 4. ACF of in-sample VAR(1,7) score residuals
+# ============================================================
+# Fit FPCA + VAR(1,7) on the full pre-test training window.
+# Residuals from the score regression show whether lags 1 and 7
+# adequately capture serial dependence in the FPCA scores.
+# External features (calendar, holiday, etc.) are not included here:
+# we are testing the lag structure of the VAR, not the full spec.
+
+library(fda)
+
+NBASIS      <- 12
+NORDER      <- 4
+K_SCORE     <- 2
+TEST_START  <- as.Date("2023-01-01")
+LAG_MAX_ACF <- 30
+
+curves     <- readRDS("data/processed/load_curves.rds")
+dates_all  <- as.Date(curves$dates)
+hours_all  <- curves$hours
+Y_all      <- curves$actual
+ok         <- complete.cases(Y_all)
+dates_all  <- dates_all[ok]
+Y_all      <- Y_all[ok, ]
+
+train_mask  <- dates_all < TEST_START
+Y_train     <- Y_all[train_mask, ]
+dates_train <- dates_all[train_mask]
+n_train     <- nrow(Y_train)
+
+# Fit FPCA on full training window
+basis_obj  <- fda::create.bspline.basis(rangeval = range(hours_all),
+                                         nbasis   = NBASIS,
+                                         norder   = NORDER)
+fd_train   <- fda::Data2fd(argvals = hours_all, y = t(Y_train), basisobj = basis_obj)
+pca_train  <- fda::pca.fd(fd_train, nharm = K_SCORE)
+scores_tr  <- pca_train$scores[, 1:K_SCORE, drop = FALSE]
+
+# Build VAR(1,7) design matrix — rows 8:n_train have both lags
+lag_start  <- 8
+n_reg      <- n_train - lag_start + 1
+
+Y_scores_reg <- scores_tr[lag_start:n_train,         , drop = FALSE]
+X_lag1       <- scores_tr[(lag_start - 1):(n_train - 1), , drop = FALSE]
+X_lag7       <- scores_tr[(lag_start - 7):(n_train - 7), , drop = FALSE]
+
+X_var <- cbind(intercept = 1, X_lag1, X_lag7)
+colnames(X_var) <- c("intercept",
+                     paste0("lag1_s", 1:K_SCORE),
+                     paste0("lag7_s", 1:K_SCORE))
+
+# Fit OLS equation by equation, collect residuals
+score_resid <- matrix(NA_real_, nrow = n_reg, ncol = K_SCORE)
+for (k in seq_len(K_SCORE)) {
+  score_resid[, k] <- lm.fit(X_var, Y_scores_reg[, k])$residuals
+}
+
+# ACF of score residuals
+acf_score_df <- bind_rows(lapply(seq_len(K_SCORE), function(k) {
+  series <- score_resid[, k]
+  ac     <- acf(series, lag.max = LAG_MAX_ACF, plot = FALSE)
+  ci     <- qnorm(0.975) / sqrt(length(series))
+  tibble(
+    component = paste0("Score ", k),
+    lag       = as.integer(ac$lag[-1]),
+    acf_val   = as.numeric(ac$acf[-1]),
+    upper_ci  =  ci,
+    lower_ci  = -ci
+  )
+}))
+
+p_score_acf <- ggplot(acf_score_df, aes(x = lag, y = acf_val)) +
+  geom_hline(aes(yintercept = upper_ci), linetype = "dashed",
+             colour = "steelblue", linewidth = 0.4) +
+  geom_hline(aes(yintercept = lower_ci), linetype = "dashed",
+             colour = "steelblue", linewidth = 0.4) +
+  geom_hline(yintercept = 0, colour = "black", linewidth = 0.3) +
+  geom_segment(aes(xend = lag, yend = 0), linewidth = 0.6) +
+  geom_point(size = 1.2) +
+  facet_wrap(~component, ncol = 1) +
+  scale_x_continuous(breaks = seq(0, LAG_MAX_ACF, 7)) +
+  labs(
+    title    = "ACF of VAR(1,7) score residuals (in-sample)",
+    subtitle = paste0("Training: ", min(dates_train), " to ", max(dates_train),
+                      "  |  K = ", K_SCORE, "  |  ", n_reg, " obs"),
+    x = "Lag (days)",
+    y = "ACF"
+  ) +
+  theme_bw(base_size = 11) +
+  theme(strip.text = element_text(size = 9))
+
+ggsave("output/figs/acf_var_score_residuals.png", p_score_acf,
+       width = 7, height = 5, dpi = 150)
+cat("Saved: output/figs/acf_var_score_residuals.png\n")
+
+# Cross-component ACF: does u_{d1} predict u_{d2}?
+ccf_obj <- ccf(score_resid[, 1], score_resid[, 2],
+               lag.max = LAG_MAX_ACF, plot = FALSE)
+ci_ccf  <- qnorm(0.975) / sqrt(n_reg)
+
+ccf_df <- tibble(
+  lag     = as.integer(ccf_obj$lag),
+  ccf_val = as.numeric(ccf_obj$acf),
+  upper_ci =  ci_ccf,
+  lower_ci = -ci_ccf
+)
+
+p_ccf <- ggplot(ccf_df, aes(x = lag, y = ccf_val)) +
+  geom_hline(aes(yintercept = upper_ci), linetype = "dashed",
+             colour = "steelblue", linewidth = 0.4) +
+  geom_hline(aes(yintercept = lower_ci), linetype = "dashed",
+             colour = "steelblue", linewidth = 0.4) +
+  geom_hline(yintercept = 0, colour = "black", linewidth = 0.3) +
+  geom_segment(aes(xend = lag, yend = 0), linewidth = 0.6) +
+  geom_point(size = 1.2) +
+  scale_x_continuous(breaks = seq(-LAG_MAX_ACF, LAG_MAX_ACF, 7)) +
+  labs(
+    title = "Cross-correlation of VAR(1,7) score residuals: Score 1 vs Score 2",
+    x     = "Lag (days, positive = Score 1 leads)",
+    y     = "CCF"
+  ) +
+  theme_bw(base_size = 11)
+
+ggsave("output/figs/acf_var_score_ccf.png", p_ccf,
+       width = 7, height = 3.5, dpi = 150)
+cat("Saved: output/figs/acf_var_score_ccf.png\n")
+
+# Ljung-Box for score residuals
+lb_scores <- bind_rows(lapply(seq_len(K_SCORE), function(k) {
+  lb <- Box.test(score_resid[, k], lag = 14, type = "Ljung-Box")
+  tibble(
+    component   = paste0("Score ", k),
+    n_obs       = n_reg,
+    LB_stat     = round(lb$statistic, 3),
+    p_value     = round(lb$p.value, 4),
+    reject_5pct = lb$p.value < 0.05
+  )
+}))
+
+cat("\n=== Ljung-Box test (lag=14) for VAR(1,7) score residuals ===\n")
+print(lb_scores)
+write_csv(lb_scores, "output/tables/acf_var_score_ljung_box.csv")
+
+cat("\nAll ACF diagnostics done.\n")
