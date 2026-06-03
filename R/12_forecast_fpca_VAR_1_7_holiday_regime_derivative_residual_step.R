@@ -15,7 +15,7 @@ dir.create("output/results", recursive = TRUE, showWarnings = FALSE)
 # Settings
 # ------------------------------------------------------------
 
-K <- 4
+K <- as.integer(Sys.getenv("FPCA_K", unset = "4"))
 K_DERIV <- 3
 NBASIS <- 12
 NORDER <- 4
@@ -24,8 +24,21 @@ MIN_TRAIN_DAYS <- 365
 MIN_LAG_DAYS <- 28
 DEBUG_N <- Inf
 
-MODEL_NAME_BASE <- "FPCA VAR(1,7) + holiday/load/derivative regime"
-MODEL_NAME_RESIDUAL <- "FPCA VAR(1,7) + holiday/load/derivative regime + residual second step"
+MODEL_NAME_BASE <- sprintf(
+  "FPCA VAR(1,7) + holiday/load/derivative regime (K=%d)",
+  K
+)
+MODEL_NAME_RESIDUAL <- sprintf(
+  "FPCA VAR(1,7) + holiday/load/derivative regime + residual second step (K=%d)",
+  K
+)
+OUTPUT_STEM <- sprintf(
+  "fpca_VAR_1_7_holiday_regime_derivative_residual_step_K%d",
+  K
+)
+TABLE_PATH <- function(name) file.path("output/tables", paste0(OUTPUT_STEM, name))
+FIG_PATH <- function(name) file.path("output/figs", paste0(OUTPUT_STEM, name))
+RESULT_PATH <- function(name) file.path("output/results", paste0(OUTPUT_STEM, name))
 
 VALIDATION_DAYS <- 365
 LAMBDA_GRID <- seq(0, 1.2, by = 0.1)
@@ -673,7 +686,7 @@ print(metric_table)
 
 write_csv(
   metric_table,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_metrics_overall.csv"
+  TABLE_PATH("_metrics_overall.csv")
 )
 
 metrics_by_hour <- eval_df |>
@@ -703,9 +716,9 @@ metrics_by_year <- eval_df |>
     .groups = "drop"
   )
 
-write_csv(metrics_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_by_hour.csv")
-write_csv(metrics_by_month, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_by_month.csv")
-write_csv(metrics_by_year, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_by_year.csv")
+write_csv(metrics_by_hour, TABLE_PATH("_by_hour.csv"))
+write_csv(metrics_by_month, TABLE_PATH("_by_month.csv"))
+write_csv(metrics_by_year, TABLE_PATH("_by_year.csv"))
 
 comparison <- eval_df |>
   filter(model %in% c(MODEL_NAME_BASE, MODEL_NAME_RESIDUAL)) |>
@@ -756,25 +769,25 @@ gain_by_hour <- comparison |>
 
 print(gain_overall)
 
-write_csv(gain_overall, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_gain_overall.csv")
-write_csv(gain_by_hour, "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_gain_by_hour.csv")
+write_csv(gain_overall, TABLE_PATH("_gain_overall.csv"))
+write_csv(gain_by_hour, TABLE_PATH("_gain_by_hour.csv"))
 
 correction_df <- as_tibble(correction_mat) |>
   mutate(date = dates[test_idx], .before = 1)
 
 write_csv(
   correction_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_values.csv"
+  TABLE_PATH("_values.csv")
 )
 
 write_csv(
   feature_track_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_features_used.csv"
+  TABLE_PATH("_features_used.csv")
 )
 
 write_csv(
   lambda_track_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_selected_lambdas.csv"
+  TABLE_PATH("_selected_lambdas.csv")
 )
 
 # ------------------------------------------------------------
@@ -792,7 +805,7 @@ p_hour <- metrics_by_hour |>
   )
 
 ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_residual_step_mae_by_hour.png",
+  FIG_PATH("_mae_by_hour.png"),
   p_hour,
   width = 9,
   height = 5
@@ -810,7 +823,7 @@ p_month <- metrics_by_month |>
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_residual_step_mae_by_month.png",
+  FIG_PATH("_mae_by_month.png"),
   p_month,
   width = 10,
   height = 5
@@ -827,7 +840,7 @@ p_gain <- gain_by_hour |>
   )
 
 ggsave(
-  "output/figs/fpca_VAR_1_7_holiday_regime_derivative_residual_step_gain_by_hour.png",
+  FIG_PATH("_gain_by_hour.png"),
   p_gain,
   width = 8,
   height = 4.8
@@ -868,10 +881,10 @@ forecast_objects <- list(
 
 saveRDS(
   forecast_objects,
-  "output/results/fpca_VAR_1_7_holiday_regime_derivative_residual_step_forecast_results.rds"
+  RESULT_PATH("_forecast_results.rds")
 )
 
 write_csv(
   eval_df,
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_eval_long.csv"
+  TABLE_PATH("_eval_long.csv")
 )
