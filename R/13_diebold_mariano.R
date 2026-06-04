@@ -42,7 +42,11 @@ eval_files <- list(
   "output/tables/fpca_VAR_1_7_holiday_regime_eval_long.csv",
   "output/tables/fpca_VAR_1_7_holiday_regime_derivative_eval_long.csv",
   "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_K2_eval_long.csv",
-  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_K4_eval_long.csv"
+  "output/tables/fpca_VAR_1_7_holiday_regime_derivative_residual_step_K4_eval_long.csv",
+  "output/tables/fpca_RF_fixed_eval_long.csv",
+  "output/tables/fpca_RF_rolling_eval_long.csv",
+  "output/tables/direct_RF_no_temp_eval_long.csv",
+  "output/tables/direct_RF_temp_eval_long.csv"
 )
 
 # Read whichever files exist
