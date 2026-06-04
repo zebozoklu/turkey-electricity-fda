@@ -60,12 +60,6 @@
       \vspace{0.5em}
       Not 24 separate quantities ---\\a single daily \textbf{curve}.
     \end{block}
-    \vspace{0.5em}
-    \begin{alertblock}{Ramadan effect}
-      During Ramadan, the entire shape shifts: iftar creates a massive
-      evening spike, overnight demand rises sharply.
-      The curve changes \emph{regime}, not just level.
-    \end{alertblock}
   \end{column}
   \end{columns}
 \end{frame}
@@ -517,11 +511,21 @@
     $K=4$ is a robustness check.
 
     \vspace{0.5em}
-    \textbf{4. Random forest benchmark:}\\
-    Replace OLS with RF on the same feature vector $z_d$
-    (same FPCA structure, same rolling-origin design).
-    Tests whether the linear score equation misses nonlinearity.
-    \textit{[Result pending.]}
+    \textbf{4. Random forest benchmark:}
+    \begin{center}
+    \scriptsize
+    \begin{tabular}{lrrr}
+      \toprule
+      Model & MAE & MAPE & MAE gain \\
+      \midrule
+      FPCA-RF (fixed basis) & 1217 & 3.14\% & $-0.3\%$ \\
+      FPCA-OLS (main model) & \textbf{980} & \textbf{2.56\%} & $+19.2\%$ \\
+      \bottomrule
+    \end{tabular}
+    \end{center}
+    RF ties the official; OLS beats it by 19\%.
+    \textbf{The linear score equation is adequate} ---
+    no meaningful nonlinearity left on the table.
   \end{column}
   \end{columns}
 \end{frame}

@@ -1,0 +1,91 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1.5cm]{geometry}
+\usepackage{mdframed}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{booktabs}
+
+\definecolor{accentblue}{RGB}{0,80,160}
+\definecolor{noteframe}{RGB}{230,238,250}
+
+\pagestyle{plain}
+\setlength{\parindent}{0pt}
+
+\newcommand{\notecard}[2]{%
+  \begin{mdframed}[backgroundcolor=noteframe, linecolor=accentblue,
+                   linewidth=1pt, roundcorner=4pt,
+                   innertopmargin=6pt, innerbottommargin=8pt,
+                   innerleftmargin=10pt, innerrightmargin=10pt,
+                   skipabove=8pt, skipbelow=0pt]
+    {\small\textcolor{accentblue}{\textbf{#1}}}\\[4pt]
+    \small #2
+  \end{mdframed}
+}
+
+\begin{document}
+
+\begin{center}
+  {\large\textbf{Presenter Notes}}\\[2pt]
+  {\small Functional Forecasting of Turkish Electricity Load Curves --- Zeynep Bozoklu}
+\end{center}
+\vspace{4pt}
+
+\notecard{Slide 1 --- Title}{
+Introduce the thesis topic: applying Functional Data Analysis to forecast Turkey's daily electricity load curve. Core result: our model beats the official TEİAŞ forecast by 19\% with near-zero p-value. Walk through 14 slides in roughly 20 minutes.
+}
+
+\notecard{Slide 2 --- The Forecasting Object}{
+Point to the overnight trough (around hour 4--5) and the broad daytime plateau (hours 9--20). The shape is structurally the same every day; what changes is the level and sharpness. Note how the official forecast (dashed) tracks the actual well on average but lies systematically below it --- we will quantify this underprediction on the next slide.
+}
+
+\notecard{Slide 3 --- Why Accuracy Matters}{
+The official forecast always undershoots actual demand. The gap widened sharply in 2024. Our rolling-origin model reduces the average bias by 78\%. Just state the empirical fact --- do not speculate about why the official underpredicts. This table motivates the research question: is there systematic improvement to be had?
+}
+
+\notecard{Slide 4 --- From 24 Numbers to a Curve: The FDA Pipeline}{
+Walk through the boxes left to right, then down and back. The core idea: instead of 24 separate forecasting models, we compress to 2 scores, forecast those, and reconstruct the full curve. The B-spline step also lets us compute the derivative of the curve, capturing ramp speed --- a feature we add later. This is the methodological contribution.
+}
+
+\notecard{Slide 5 --- Data}{
+Data from EPIAS, Turkey's electricity market operator, via public API. Having both actual load and the official TEİAŞ day-ahead forecast is key: it gives us a directly comparable operational benchmark. No weather data is used in the main model --- a deliberate choice we revisit when discussing ramp-hour losses.
+}
+
+\notecard{Slide 6 --- FPCA: Two Numbers Capture the Curve}{
+Top panel (FPC1): nearly flat at 0.13--0.28, meaning a high score uniformly lifts the whole curve --- the ``how much electricity today'' factor. Bottom panel (FPC2): positive at hours 0--5 and 18--23, negative daytime --- the overnight-vs-daytime contrast. Three coloured lines (2019--21, 2020--22, 2022--24) nearly overlap, which empirically justifies using a fixed FPCA basis rather than re-estimating it dynamically.
+}
+
+\notecard{Slide 7 --- Score Forecasting Model}{
+Lag 7 captures the dominant weekly pattern (Monday resembles last Monday); lag 1 adjusts for recent drift. All features in $z_d$ are known before day $d$ starts --- no lookahead. Derivative features come from differentiating the B-spline curve, capturing how fast demand was changing yesterday. Key message to committee: holiday indicators are non-negotiable; the model is competitive only once they are included.
+}
+
+\notecard{Slide 8 --- Evaluation: Rolling-Origin Design}{
+Stress the no-leakage principle: the model never sees the future. This mirrors real operational deployment. The Diebold-Mariano test is appropriate because we compare two forecasts for the same target over the same sample --- it accounts for forecast error correlation. Citing Harvey, Leybourne and Newbold (1997) for the small-sample correction is good practice if the committee asks.
+}
+
+\notecard{Slide 9 --- Main Results}{
+Walk the table top to bottom. The seasonal na\"ive shows the floor --- the problem is hard. Pure VAR dynamics are worse than the official. The model crosses into positive territory only when holiday and load-shape features are added. Derivative features add another 2 points. Both gains are significant at near-zero p-value ($p \approx 10^{-135}$ and $10^{-163}$). The main model (bold row) is the baseline contribution; the residual correction row previews the next extension.
+}
+
+\notecard{Slide 10 --- Where the Model Wins and Where It Loses}{
+The ramp-hour dip at hours 6--9 is the key diagnostic. Demand nearly doubles during this window as factories start and HVAC switches on. We do not know what gives the official forecast its advantage at ramp hours --- do not speculate. This gap motivates the residual correction step on the next slide.
+}
+
+\notecard{Slide 11 --- Residual Correction: Exploiting Persistent Errors}{
+The ACF panel for Hour 6 is the punchline: base model errors are strongly autocorrelated (ACF $\approx$ 0.4 at lag 1, persisting 14 days). The orange series after correction drops sharply toward zero. The correction is estimated on past data only --- no leakage. Key message: the residual step wins at the ramp hours (6--9) where the base model lost.
+}
+
+\notecard{Slide 12 --- Robustness Checks}{
+Direct RF (forecasting each hour separately, no FPCA) beats FPCA-OLS at most daytime hours --- this is a genuine finding. Do not downplay it. The FPCA-OLS advantage is at overnight hours. The right framing: both approaches beat the official; the comparative strengths differ by time of day.
+}
+
+\notecard{Slide 13 --- Thesis Road Map}{
+The empirical core is complete. Open items: (1) a formal literature review situating this within FDA and electricity forecasting, (2) adding temperature data to address the ramp-hour weakness, and (3) probabilistic extensions if time allows. Be direct with the committee about what is done vs planned.
+}
+
+\notecard{Slide 14 --- References}{
+Keep this slide up while answering questions. If asked about methodology, cite Kokoszka \& Reimherr (2017). If asked about the DM test, cite Diebold \& Mariano (1995). If asked about FDA applied to energy forecasting, Hyndman \& Ullah (2007) is the closest precedent.
+}
+
+\end{document}
