@@ -168,6 +168,38 @@ print(ip_table, n = 20)
 write_csv(ip_table, "output/tables/eigenfunction_inner_products.csv")
 
 # ============================================================
+# 3b. Full K×K cross-component inner product matrix
+# ============================================================
+# Verifies FPC1 and FPC2 have not swapped or rotated between windows.
+# Diagonal near 1, off-diagonal near 0 = components are consistent.
+
+cross_ip <- bind_rows(lapply(pairs, function(p) {
+  a <- fits[[p[1]]]$harmonics
+  b <- fits[[p[2]]]$harmonics
+  bind_rows(lapply(1:K, function(j) {
+    aj <- a[, j] / sqrt(sum(a[, j]^2))
+    bind_rows(lapply(1:K, function(l) {
+      bl <- b[, l] / sqrt(sum(b[, l]^2))
+      tibble(
+        pair          = paste(p[1], "vs", p[2]),
+        from          = paste0("FPC ", j),
+        to            = paste0("FPC ", l),
+        inner_product = abs(sum(aj * bl))
+      )
+    }))
+  }))
+}))
+
+cat("\n=== Full K×K cross-component inner product matrices ===\n")
+cat("(diagonal ≈ 1 = same component; off-diagonal ≈ 0 = no rotation/swap)\n\n")
+cross_ip |>
+  pivot_wider(names_from = to, values_from = inner_product) |>
+  print(n = 30)
+
+write_csv(cross_ip, "output/tables/eigenfunction_cross_inner_products.csv")
+cat("Saved: output/tables/eigenfunction_cross_inner_products.csv\n")
+
+# ============================================================
 # 4. Variance proportions per window
 # ============================================================
 
