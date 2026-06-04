@@ -67,3 +67,4 @@ output/tables/
 # Mac
 .DS_Store
 output/rf_run.log
+output/logs_16e.txt
