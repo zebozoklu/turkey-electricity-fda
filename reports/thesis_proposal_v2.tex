@@ -105,7 +105,69 @@
 \end{frame}
 
 % ============================================================
-% SLIDE 4: THE FDA PIPELINE
+% SLIDE 4: RESEARCH QUESTIONS
+% ============================================================
+\begin{frame}{Research Questions}
+  \begin{enumerate}
+    \item \textbf{Representation:} Can B-spline smoothing and FPCA represent
+          Turkey's daily electricity load curves with negligible information loss?\\
+          {\small How many functional principal components suffice?}
+
+    \vspace{0.5em}
+    \item \textbf{Forecasting accuracy:} Does a functional VAR model augmented
+          with holiday and derivative features statistically outperform the
+          official TEİAŞ day-ahead forecast?\\
+          {\small Tested by Diebold-Mariano over 1,096 hold-out days, 2023--2025.}
+
+    \vspace{0.5em}
+    \item \textbf{Error structure:} Can a data-driven residual correction further
+          reduce errors at the morning ramp hours where the base model underperforms?\\
+          {\small Does serially correlated error contain exploitable signal?}
+  \end{enumerate}
+  \note{Three questions, three result sections. Q1 is answered in the FPCA slide (97.3\% variance retained with K=2; K=4 robustness check confirms this). Q2 is the main DM result (+19.2\%, $p \approx 10^{-163}$). Q3 is the residual correction (+46.2\%, wins at all 24 hours including ramp). Keep this slide brief --- it frames what the rest of the talk answers.}
+\end{frame}
+
+% ============================================================
+% SLIDE 5: LITERATURE  [placeholder -- to be expanded]
+% ============================================================
+\begin{frame}{Literature Positioning \textcolor{gray}{\small [to be expanded]}}
+  \begin{columns}
+    \begin{column}{0.48\textwidth}
+      \textbf{Functional Data Analysis}
+      \vspace{0.2em}
+      \begin{itemize}
+        \item Ramsay \& Silverman (2005): FDA foundations
+        \item Kokoszka \& Reimherr (2017): modern inference
+        \item Hyndman \& Ullah (2007): functional forecasting (demographics)
+      \end{itemize}
+      \vspace{0.4em}
+      \textbf{FDA applied to load curves}
+      \begin{itemize}
+        \item \textit{[to be identified in literature review]}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Short-term electricity forecasting}
+      \vspace{0.2em}
+      \begin{itemize}
+        \item Classical: ARIMA, exponential smoothing
+        \item ML: gradient boosting, neural networks
+        \item Xie \& Hong (2016): residual simulation / correction
+      \end{itemize}
+      \vspace{0.4em}
+      \textbf{Gap this thesis fills}
+      \begin{itemize}
+        \item No FDA study on Turkey's post-liberalisation electricity market
+        \item Holiday + derivative features tailored to Turkish market structure
+        \item Formal DM testing against operational benchmark
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \note{Placeholder --- the systematic literature review is the primary remaining task. Key message to establish in the final thesis: FDA has been applied to electricity load curves in Western European contexts but not Turkey; and existing Turkish electricity forecasting papers use scalar methods (ARIMA, regression). The contribution is both methodological and empirical (Turkey 2019--2025, post-2013 liberalisation). Add specific paper citations as the review progresses.}
+\end{frame}
+
+% ============================================================
+% SLIDE 6: THE FDA PIPELINE
 % ============================================================
 \begin{frame}{From 24 Numbers to a Curve: The FDA Pipeline}
   \vspace{-0.2em}
@@ -165,7 +227,7 @@
         \draw[->, thick] (-0.2,0) -- (8.6,0) node[right,font=\small] {Time};
         \draw[fill=accentblue!25, draw=accentblue, thick]
               (0,0.35) rectangle (6.3,0.85);
-        \node[font=\small] at (3.15,0.60) {Training (expanding window)};
+        \node[font=\small] at (3.15,0.60) {Training (2019--end of 2022)};
         \draw[fill=accentred!25, draw=accentred, thick]
               (6.3,0.35) rectangle (8.4,0.85);
         \node[font=\small] at (7.35,0.60) {Evaluation};
@@ -173,14 +235,11 @@
                            3.78/2022, 5.04/2023, 6.3/2024, 7.56/2025} {
           \draw (\x,0.1) -- (\x,-0.1) node[below,font=\small] {\y};
         }
-        \draw[-Stealth, thick, accentred]
-              (6.3,-0.55) -- (8.4,-0.55)
-              node[midway, below, font=\small] {1,096 days, rolling-origin};
       \end{tikzpicture}
       \end{center}
       \vspace{0.4em}
-      \small FPCA and VAR re-estimated before each forecast day.\\
-      Only data dated $<d$ used to forecast day $d$.
+      \small Rolling-origin design: model re-estimated before each\\
+      forecast day using only past data. See evaluation slide.
     \end{column}
     \begin{column}{0.42\textwidth}
       \small
@@ -208,7 +267,7 @@
       \end{tabular}
     \end{column}
   \end{columns}
-  \note{Data from EPIAS, Turkey's electricity market operator, via public API. Having both actual load and the official TEİAŞ day-ahead forecast is key: it gives us a directly comparable operational benchmark. No weather data is used in the main model --- a deliberate choice we revisit when discussing ramp-hour losses.}
+  \note{Data from EPIAS, Turkey's electricity market operator, via public API. Having both actual load and the official TEİAŞ day-ahead forecast is key: it gives us a directly comparable operational benchmark. The evaluation is deliberately aligned with the operational benchmark: same target days, same hourly load object, and no future information.}
 \end{frame}
 
 % ============================================================
@@ -241,6 +300,9 @@
 
       \vspace{0.6em}
       \textbf{Stability:} three sub-period fits nearly coincide $\Rightarrow$ static FPCA justified
+
+      \vspace{0.4em}
+      \textbf{Robustness:} $K=4$ adds $<1$\% further variance; results unchanged
     \end{column}
   \end{columns}
   \note{Top panel (FPC1): nearly flat at 0.13--0.28, meaning a high score uniformly lifts the whole curve --- the ``how much electricity today'' factor. Bottom panel (FPC2): positive at hours 0--5 and 18--23, negative daytime --- the overnight-vs-daytime contrast. Three coloured lines (2019--21, 2020--22, 2022--24) nearly overlap, which empirically justifies using a fixed FPCA basis rather than re-estimating it dynamically.}
@@ -344,7 +406,7 @@
 % ============================================================
 % SLIDE 9: MAIN RESULTS
 % ============================================================
-\begin{frame}{Main Results}
+\begin{frame}{Main Results: DM Confirms the Gains}
   \begin{center}
   \small
   \begin{tabular}{p{0.40\textwidth}rrrrc}
@@ -370,9 +432,9 @@
   \end{center}
   \vspace{0.2em}
   \footnotesize
-  *** $p<0.001$ (DM test, pooled over 26,304 obs.). MAE in MWh/hour.
-  \colorbox{wingreen}{Green} = beats official.
-  \note{Walk the table top to bottom. The seasonal na\"{i}ve shows the floor --- the problem is hard. Pure VAR dynamics are worse than the official. The model turns positive only when holiday and load-shape features are added. Derivative features add another 2 points. Both gains are significant at near-zero p-value ($p \approx 10^{-135}$ and $10^{-163}$ respectively). The main model (bold row) is the baseline contribution; the residual correction row previews the next extension.}
+  DM test vs.\ official: *** $p<0.001$;\enspace n.s. = not significant.
+  MAE in MWh/hour; pooled over 26,304 obs.
+  \note{Walk the table top to bottom. The seasonal na\"{i}ve shows the floor --- the problem is hard. Pure VAR dynamics are worse than the official. The model turns positive only when holiday and load-shape features are added. Derivative features add another 2 points. Report the DM result explicitly: both the holiday/load-shape row and derivative row beat the official at $p<0.001$, with near-zero p-values ($p \approx 10^{-135}$ and $10^{-163}$ respectively). The main model (bold row) is the baseline contribution; the residual correction row previews the next extension.}
 \end{frame}
 
 % ============================================================
@@ -401,7 +463,7 @@
       \small DM: significant at 18 of 24 hours (5\% level).
     \end{column}
   \end{columns}
-  \note{The ramp-hour dip at hours 6--9 is the key diagnostic. Demand nearly doubles during this window as factories start and HVAC switches on. We do not know what gives the official forecast its advantage at ramp hours --- do not speculate. This gap motivates the residual correction step on the next slide.}
+  \note{The ramp-hour dip at hours 6--9 is the key diagnostic. Demand changes very quickly during this window, so small timing errors become large hourly errors. We do not know what gives the official forecast its advantage at ramp hours --- do not speculate. This gap motivates the residual correction step on the next slide.}
 \end{frame}
 
 % ============================================================
@@ -439,45 +501,88 @@
 \end{frame}
 
 % ============================================================
-% SLIDE 12: ROBUSTNESS
+% SLIDE 12: RANDOM FOREST BENCHMARK
 % ============================================================
-\begin{frame}{Robustness Checks}
+\begin{frame}{Random Forest Benchmark: Strong but Different}
   \begin{columns}
-    \begin{column}{0.60\textwidth}
-      \includegraphics[width=\linewidth]{../output/figs/direct_RF_mae_by_hour_notemp.png}
+    \begin{column}{0.58\textwidth}
+      \includegraphics[width=\linewidth]{../output/figs/direct_RF_mae_by_hour_load_only.png}
     \end{column}
-    \begin{column}{0.37\textwidth}
-      \textbf{Direct RF vs.\ FPCA-OLS (2023):}
+    \begin{column}{0.39\textwidth}
+      \textbf{2023 benchmark sample}\\
+      {\small 8,760 hourly forecasts}
       \vspace{0.3em}
 
-      \small
-      \begin{itemize}
-        \item Direct RF (no FPCA) wins at most daytime hours (8--23)
-        \item FPCA-OLS wins overnight (0--5)
-        \item Neither model uses temperature data
-      \end{itemize}
-
-      \vspace{0.5em}
-      \textbf{$K=4$ components:}
-      \small
-      \begin{tabular}{lrr}
+      \scriptsize
+      \begin{tabular}{lrrc}
         \toprule
-        $K$ & MAE & MAE (+resid.) \\
+        Model & MAE & vs.\ off. & DM \\
         \midrule
-        2   & 980 & 653 \\
-        4   & 801 & \textbf{640} \\
+        Official & 1052 & ref. & --- \\
+        FPCA-OLS & 910 & +13.5\% & *** \\
+        \textbf{Direct RF} & \textbf{718} & \textbf{+31.8\%} & *** \\
         \bottomrule
       \end{tabular}
-      \vspace{0.2em}
 
-      \small $K=2$ is the parsimonious baseline.
+      \vspace{0.5em}
+      \footnotesize
+      \textbf{RF vs.\ FPCA-OLS:}\\
+      Direct RF has lower MAE at \textbf{24/24 hours}; pairwise DM
+      $p \approx 1.2\times10^{-85}$.
+
+      \vspace{0.5em}
+      \textbf{Interpretation:}
+      \begin{itemize}
+        \item Nonlinear hour-specific models are a serious benchmark.
+        \item FDA remains the interpretable functional baseline, evaluated over 2023--2025.
+      \end{itemize}
+
+      \vspace{0.2em}
+      \scriptsize *** $p<0.001$ vs.\ official.
     \end{column}
   \end{columns}
-  \note{Direct RF (forecasting each hour separately, no FPCA) beats FPCA-OLS at most daytime hours --- this is a genuine finding. Do not downplay it. The FPCA-OLS advantage is at overnight hours. The right framing: both approaches beat the official; the comparative strengths differ by time of day. Note: the figure also shows a temperature variant of Direct RF --- the two lines are nearly identical, so focus attention on the no-temperature line.}
+  \note{Give the Random Forest result proper weight. On the 2023 benchmark sample, FPCA-OLS beats the official forecast (MAE 910 vs.\ 1052, DM $p \approx 1.8\times10^{-32}$), but Direct RF is much stronger (MAE 718, +31.8\% vs.\ official, DM $p \approx 1.6\times10^{-167}$). Direct RF also beats FPCA-OLS at all 24 hours, with pairwise DM $p \approx 1.2\times10^{-85}$. The framing is not that FDA is invalid; it is that direct nonlinear hourly models are a strong benchmark, while FDA remains the interpretable functional model evaluated across the full 2023--2025 rolling sample.}
 \end{frame}
 
 % ============================================================
-% SLIDE 13: ROAD MAP
+% SLIDE 15: CONTRIBUTIONS
+% ============================================================
+\begin{frame}{Summary of Contributions}
+  \begin{columns}
+    \begin{column}{0.50\textwidth}
+      \textbf{Methodological}
+      \vspace{0.3em}
+      \begin{itemize}
+        \item Functional representation of Turkey's daily load curves\\
+              {\small B-splines + FPCA; $K=2$ retains 97.3\% of variation}
+        \item Holiday-aware and derivative-augmented feature\\
+              design for functional VAR
+        \item Residual correction via rolling CV --- zero lookahead
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Empirical}
+      \vspace{0.3em}
+      \begin{itemize}
+        \item Base model: \textbf{+19.2\%} MAE vs.\ official TEİAŞ\\
+              {\small DM $p \approx 10^{-163}$; 1,096 days, 2023--2025}
+        \item Residual correction: \textbf{+46.2\%}; wins at all 24 hours
+        \item Average bias reduced from 467 to 103 MWh/hour
+        \item Random Forest benchmarked as nonlinear reference
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \vspace{0.6em}
+  \begin{center}
+    \small
+    \textbf{Core claim:} Functional representation combined with domain-aware features\\
+    yields statistically significant, operationally relevant improvement over the official benchmark.
+  \end{center}
+  \note{This slide crystallises what the thesis has demonstrated. The committee should leave knowing: (1) what was built, (2) what was found, and (3) that the finding is backed by a formal test on a proper hold-out. The core claim is deliberately falsifiable --- a specific model, a specific test, a specific benchmark. Road Map on the next slide covers what remains.}
+\end{frame}
+
+% ============================================================
+% SLIDE 16: ROAD MAP
 % ============================================================
 \begin{frame}{Thesis Road Map}
   \begin{columns}
@@ -499,13 +604,13 @@
       \vspace{0.3em}
       \begin{itemize}
         \item[$\square$] Systematic literature review
-        \item[$\square$] Weather/temperature covariates (ramp hours)
+        \item[$\square$] Ramp-hour error diagnostics
         \item[$\square$] Probabilistic forecasting (prediction intervals)
         \item[$\square$] Thesis write-up
       \end{itemize}
     \end{column}
   \end{columns}
-  \note{The empirical core is complete. Open items: (1) a formal literature review situating this within FDA and electricity forecasting, (2) adding temperature data to address the ramp-hour weakness, and (3) probabilistic extensions if time allows. Be direct with the committee about what is done vs planned.}
+  \note{The empirical core is complete. Open items: (1) a formal literature review situating this within FDA and electricity forecasting, (2) writing up the ramp-hour diagnostic evidence carefully, and (3) probabilistic extensions if time allows. Be direct with the committee about what is done vs planned.}
 \end{frame}
 
 % ============================================================

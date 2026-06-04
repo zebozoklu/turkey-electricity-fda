@@ -1,0 +1,125 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1.7cm]{geometry}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{booktabs}
+
+\definecolor{ink}{RGB}{20,24,31}
+\definecolor{muted}{RGB}{91,99,112}
+\definecolor{rulegray}{RGB}{196,202,211}
+
+\pagestyle{plain}
+\setlength{\parindent}{0pt}
+\newcommand{\slidenote}[2]{%
+  {\large\textbf{#1}}\par
+  {\color{rulegray}\rule{\linewidth}{0.4pt}}\par
+  \small #2\par\vspace{0.85em}
+}
+
+\begin{document}
+
+\begin{center}
+  {\Large\textbf{Presenter Notes}}\\[2pt]
+  {\small Functional Forecasting of Turkish Electricity Load Curves -- v3}
+\end{center}
+
+\slidenote{Slide 1 -- Title}{
+Open with the empirical object and the evaluation discipline. The thesis asks
+whether a transparent functional model can improve the official day-ahead
+benchmark. State the main result early: K=2 FPCA--VAR score model, MAE 980,
+19.2\% gain, pooled DM p-value near $10^{-163}$.
+}
+
+\slidenote{Slide 2 -- Forecasting Question}{
+Frame the proposal as an operational benchmark problem. Positive bias means
+actual load exceeded the forecast. The official benchmark has average bias
+467 MWh/hour over 2023--2025; the main model reduces this to 103 MWh/hour.
+}
+
+\slidenote{Slide 3 -- Forecasting Object}{
+Emphasize the modeling choice: a day is one curve, not 24 unrelated targets.
+Level, shape contrast, and ramp speed are properties of the full trajectory.
+This motivates smoothing, FPCA, score forecasting, and reconstruction.
+}
+
+\slidenote{Slide 4 -- Research Design}{
+Walk through the pipeline. Hourly observations become a smoothed function;
+the function is compressed into FPCA scores; scores are forecast; the curve is
+reconstructed. Keep the notation simple and make clear that the score forecast
+is the central model.
+}
+
+\slidenote{Slide 5 -- FPCA Compression}{
+The key number is 97.3\% cumulative variation with two components. FPC 1 is
+a level factor; FPC 2 is a peak--plateau contrast. The sub-period inner
+products above 0.99 show that the empirical basis is stable enough for the
+forecasting design.
+}
+
+\slidenote{Slide 6 -- Score Forecasting Model}{
+Define FPCA--OLS carefully: FPCA scores are forecast by an OLS score equation.
+It is not separate hourly OLS and it is not RF. The information set is
+$\mathcal{F}_{d-1}$, and the model uses lag 1, lag 7, calendar, holiday,
+load-shape, rolling-history, and derivative features.
+}
+
+\slidenote{Slide 7 -- Rolling-Origin Evaluation and DM}{
+This slide answers whether DM can be used by hour. Yes: the pooled test uses
+all hourly errors, and the hour-by-hour tests apply the same loss-differential
+test separately for each fixed hour. Mention HAC variance and the
+Harvey--Leybourne--Newbold correction without over-explaining.
+}
+
+\slidenote{Slide 8 -- Main Empirical Result}{
+Read the table as a specification path. Pure score dynamics are worse than
+the official benchmark. Holiday and load-shape features create the large
+improvement; derivative features produce the main thesis model. The residual
+row is a second-step extension, not the baseline model.
+}
+
+\slidenote{Slide 9 -- Hourly Diagnostics}{
+The main model wins most hours but not all hours. It has lower MAE at 19 of
+24 hours and DM-significant gains at 18 of 24. The weaker window is a
+transition period, so the correct statement is local weakness, not model
+failure.
+}
+
+\slidenote{Slide 10 -- Residual Second Step}{
+The point is residual structure. The base-model errors are autocorrelated, so
+a correction curve estimated from past residuals improves forecasts. Stress
+that shrinkage is selected by rolling-origin cross-validation on pre-target
+data only.
+}
+
+\slidenote{Slide 11 -- Random Forest Benchmark}{
+Be precise. This is the 2023 benchmark sample, not the full 2023--2025 thesis
+window. The FPCA comparator is the K=2 FPCA--VAR score model without residual
+correction, restricted to the same 2023 dates. Direct RF predicts each hour
+directly, bypasses FPCA, and is a strong nonlinear benchmark: MAE 718, gain
+31.8\%, lower MAE at 24/24 hours, pairwise DM vs FPCA--VAR about
+$1.2\times10^{-85}$.
+}
+
+\slidenote{Slide 12 -- What Each Comparison Answers}{
+Use this slide to prevent the RF result from confusing the thesis claim.
+Main FPCA--VAR vs official answers the interpretable functional model question.
+Residual correction answers whether the base errors contain serial structure.
+Direct RF answers how strong a direct nonlinear hourly benchmark is on the
+2023 sample.
+}
+
+\slidenote{Slide 13 -- Contributions and Status}{
+Close the proposal candidly. The empirical pipeline is complete: FPCA
+representation, rolling-origin evaluation, DM testing, residual diagnostics,
+and RF benchmarking. Remaining work is literature positioning, final writing,
+and the scope decision on prediction intervals.
+}
+
+\slidenote{Slide 14 -- References}{
+Use this slide for questions. Diebold--Mariano and Harvey--Leybourne--Newbold
+support the test; Kokoszka--Reimherr and Hyndman--Ullah support functional
+forecasting; Xie--Hong is useful for the residual-correction context.
+}
+
+\end{document}

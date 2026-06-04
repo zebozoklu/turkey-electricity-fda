@@ -49,7 +49,7 @@ Walk through the boxes left to right, then down and back. The core idea: instead
 }
 
 \notecard{Slide 5 --- Data}{
-Data from EPIAS, Turkey's electricity market operator, via public API. Having both actual load and the official TEİAŞ day-ahead forecast is key: it gives us a directly comparable operational benchmark. No weather data is used in the main model --- a deliberate choice we revisit when discussing ramp-hour losses.
+Data from EPIAS, Turkey's electricity market operator, via public API. Having both actual load and the official TEİAŞ day-ahead forecast is key: it gives us a directly comparable operational benchmark. The evaluation is deliberately aligned with the operational benchmark: same target days, same hourly load object, and no future information.
 }
 
 \notecard{Slide 6 --- FPCA: Two Numbers Capture the Curve}{
@@ -65,23 +65,23 @@ Stress the no-leakage principle: the model never sees the future. This mirrors r
 }
 
 \notecard{Slide 9 --- Main Results}{
-Walk the table top to bottom. The seasonal na\"ive shows the floor --- the problem is hard. Pure VAR dynamics are worse than the official. The model crosses into positive territory only when holiday and load-shape features are added. Derivative features add another 2 points. Both gains are significant at near-zero p-value ($p \approx 10^{-135}$ and $10^{-163}$). The main model (bold row) is the baseline contribution; the residual correction row previews the next extension.
+Walk the table top to bottom. The seasonal na\"ive shows the floor --- the problem is hard. Pure VAR dynamics are worse than the official. The model crosses into positive territory only when holiday and load-shape features are added. Derivative features add another 2 points. Report the DM result explicitly: both the holiday/load-shape row and derivative row beat the official at $p<0.001$, with near-zero p-values ($p \approx 10^{-135}$ and $10^{-163}$). The main model (bold row) is the baseline contribution; the residual correction row previews the next extension.
 }
 
 \notecard{Slide 10 --- Where the Model Wins and Where It Loses}{
-The ramp-hour dip at hours 6--9 is the key diagnostic. Demand nearly doubles during this window as factories start and HVAC switches on. We do not know what gives the official forecast its advantage at ramp hours --- do not speculate. This gap motivates the residual correction step on the next slide.
+The ramp-hour dip at hours 6--9 is the key diagnostic. Demand changes very quickly during this window, so small timing errors become large hourly errors. We do not know what gives the official forecast its advantage at ramp hours --- do not speculate. This gap motivates the residual correction step on the next slide.
 }
 
 \notecard{Slide 11 --- Residual Correction: Exploiting Persistent Errors}{
 The ACF panel for Hour 6 is the punchline: base model errors are strongly autocorrelated (ACF $\approx$ 0.4 at lag 1, persisting 14 days). The orange series after correction drops sharply toward zero. The correction is estimated on past data only --- no leakage. Key message: the residual step wins at the ramp hours (6--9) where the base model lost.
 }
 
-\notecard{Slide 12 --- Robustness Checks}{
-Direct RF (forecasting each hour separately, no FPCA) beats FPCA-OLS at most daytime hours --- this is a genuine finding. Do not downplay it. The FPCA-OLS advantage is at overnight hours. The right framing: both approaches beat the official; the comparative strengths differ by time of day.
+\notecard{Slide 12 --- Random Forest Benchmark}{
+Give the Random Forest result proper weight. On the 2023 benchmark sample, FPCA-OLS beats the official forecast (MAE 910 vs.\ 1052, DM $p \approx 1.8\times10^{-32}$), but Direct RF is much stronger (MAE 718, +31.8\% vs.\ official, DM $p \approx 1.6\times10^{-167}$). Direct RF also beats FPCA-OLS at all 24 hours, with pairwise DM $p \approx 1.2\times10^{-85}$. The framing is not that FDA is invalid; it is that direct nonlinear hourly models are a strong benchmark, while FDA remains the interpretable functional model evaluated across the full 2023--2025 rolling sample.
 }
 
 \notecard{Slide 13 --- Thesis Road Map}{
-The empirical core is complete. Open items: (1) a formal literature review situating this within FDA and electricity forecasting, (2) adding temperature data to address the ramp-hour weakness, and (3) probabilistic extensions if time allows. Be direct with the committee about what is done vs planned.
+The empirical core is complete. Open items: (1) a formal literature review situating this within FDA and electricity forecasting, (2) writing up the ramp-hour diagnostic evidence carefully, and (3) probabilistic extensions if time allows. Be direct with the committee about what is done vs planned.
 }
 
 \notecard{Slide 14 --- References}{
