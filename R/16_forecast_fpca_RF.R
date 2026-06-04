@@ -370,7 +370,7 @@ if (has_official)
   eval_df <- bind_rows(eval_df, make_eval_df(actual_test, pred_official, "Official forecast"))
 
 # Append OLS for a unified comparison table
-eval_combined <- bind_rows(eval_df, ols_eval |> select(names(eval_df)))
+eval_combined <- bind_rows(eval_df, ols_eval |> dplyr::select(all_of(names(eval_df))))
 
 # ------------------------------------------------------------
 # Metrics

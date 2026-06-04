@@ -363,7 +363,7 @@ eval_df <- bind_rows(
 if (has_official)
   eval_df <- bind_rows(eval_df, make_eval_df(actual_test, pred_official, "Official forecast"))
 
-eval_combined <- bind_rows(eval_df, ols_eval |> select(names(eval_df)))
+eval_combined <- bind_rows(eval_df, ols_eval |> dplyr::select(all_of(names(eval_df))))
 
 # Metrics
 metrics <- eval_combined |>
@@ -383,7 +383,7 @@ if (nrow(off)==1) {
 }
 
 cat("=== Overall metrics ===\n")
-print(metrics |> select(model,mae,rmse,mape,bias,mae_gain,mape_gain) |>
+print(metrics |> dplyr::select(model,mae,rmse,mape,bias,mae_gain,mape_gain) |>
       mutate(across(where(is.numeric),\(x) round(x,2))), width=130)
 
 write_csv(metrics, "output/tables/fpca_RF_fixed_metrics_overall.csv")
@@ -397,8 +397,8 @@ metrics_by_hour <- eval_combined |>
 write_csv(metrics_by_hour, "output/tables/fpca_RF_fixed_by_hour.csv")
 
 # RF vs OLS gain by hour
-rf_h  <- metrics_by_hour |> filter(model==MODEL_NAME) |> select(hour, rf_mae=mae, rf_mape=mape)
-ols_h <- metrics_by_hour |> filter(model==OLS_NAME)   |> select(hour, ols_mae=mae, ols_mape=mape)
+rf_h  <- metrics_by_hour |> filter(model==MODEL_NAME) |> dplyr::select(hour, rf_mae=mae, rf_mape=mape)
+ols_h <- metrics_by_hour |> filter(model==OLS_NAME)   |> dplyr::select(hour, ols_mae=mae, ols_mape=mape)
 gain_h <- inner_join(rf_h, ols_h, by="hour") |>
   mutate(mae_gain  = 100*(ols_mae  - rf_mae)  / ols_mae,
          mape_gain = 100*(ols_mape - rf_mape) / ols_mape)
