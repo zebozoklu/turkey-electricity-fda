@@ -1,0 +1,228 @@
+
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[
+  a4paper,
+  left=0.85in,
+  right=0.85in,
+  top=0.75in,
+  bottom=0.85in
+]{geometry}
+
+\usepackage[hidelinks]{hyperref}
+\usepackage[round,authoryear]{natbib}
+\usepackage{booktabs}
+
+\usepackage{indentfirst}
+\setlength{\parindent}{1.5em}
+\setlength{\parskip}{0pt}
+\setlength{\abovedisplayskip}{4pt}
+\setlength{\belowdisplayskip}{4pt}
+\setlength{\arraycolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+
+
+\begin{document}
+\fontsize{9.2}{10.8}\selectfont
+
+\begin{center}
+{\Large Second Progress Report: Functional Forecasting of Turkish Electricity Load Curves}\\
+\vspace{0.5em}
+{\normalsize Zeynep Bozoklu}\\
+\vspace{0.25em}
+{\small \href{https://github.com/zebozoklu/turkey-electricity-fda}{GitHub repository}}
+\end{center}
+
+\vspace{-0.5em}
+
+\section*{Overview}
+
+The first report established the functional representation and a sequence of FPCA score regression models, culminating in a specification that improves on the official day-ahead forecast by \(19.2\%\) in MAE and \(23.9\%\) in RMSE on the 2023--2024 rolling-origin evaluation period. This report documents four new analyses completed since then: (i) Diebold--Mariano tests establishing statistical significance of the forecast gains, (ii) eigenfunction stability checks motivating the fixed FPCA basis, (iii) an analysis of the structure of the official forecast's errors that provides direct empirical support for the FDA approach, and (iv) residual autocorrelation diagnostics. A random forest benchmark for the score regression has been implemented but not yet run; results will be added once the rolling loop completes.
+
+\section*{Updated model comparison}
+
+The table below reports overall metrics for all evaluated specifications on the common test period (2023-01-01 to 2024-12-31, \(N = 26{,}304\) hourly observations across 1{,}096 days). The rows are ordered as a model-building path. MAPE is added as a scale-free summary.
+
+\begin{center}
+\fontsize{8.0}{9.4}\selectfont
+\begin{tabular}{p{0.42\textwidth}rrrrrr}
+\toprule
+Model & MAE & RMSE & MAPE & Bias & MAE gain & RMSE gain\\
+\midrule
+Seasonal naive \(Y_{d-7}\)                        & 1912.5 & 3130.0 & 5.13\% &   39.9 & \(-57.6\%\) & \(-79.9\%\)\\
+Official forecast                                  & 1213.5 & 1740.3 & 3.15\% &  466.9 & \phantom{-}0.0\% & \phantom{-}0.0\%\\
+\midrule
+FPCA VAR(1,7) scores                               & 1442.6 & 2018.3 & 3.76\% &  160.1 & \(-18.9\%\) & \(-16.0\%\)\\
+FPCA VAR(1,7) + ramp/calendar                      & 1238.4 & 1716.3 & 3.26\% &  110.1 &  \(-2.1\%\) & \(\phantom{-}1.4\%\)\\
+FPCA VAR(1,7) + holiday/load-shape                 & 1000.6 & 1353.6 & 2.63\% &  \(-54.7\) & \(17.5\%\) & \(22.2\%\)\\
+FPCA VAR(1,7) + holiday/load/derivative            & \textbf{980.4} & \textbf{1324.4} & \textbf{2.56\%} &  102.6 & \(\mathbf{19.2\%}\) & \(\mathbf{23.9\%}\)\\
+\midrule
+Base model + residual second step                  & \textbf{652.9} & \textbf{982.6} & \textbf{1.70\%} &  90.0 & \(\mathbf{46.2\%}\) & \(\mathbf{43.5\%}\)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\fontsize{9.2}{10.8}\selectfont
+
+\noindent The main model (holiday/load/derivative, \(K=2\)) achieves MAPE of 2.56\%, compared to 3.15\% for the official forecast and 5.13\% for the seasonal naive benchmark. The residual-step extension reduces MAPE to 1.70\%.
+
+\section*{Statistical significance: Diebold--Mariano tests}
+
+To test whether the forecast improvements are statistically significant, Diebold--Mariano tests \citep{diebold_mariano_1995} with the \citet{harvey_etal_1997} small-sample correction are applied. The loss function is absolute error, consistent with reporting MAE. The null hypothesis is equal predictive ability against the alternative that the challenger has strictly lower expected absolute loss than the official forecast.
+
+Three formats are reported: (1) pooled hourly, in which the full \(26{,}304\) date-hour error series is tested; (2) daily aggregated, in which the panel is collapsed to \(1{,}096\) daily mean absolute errors; and (3) hour-by-hour, in which a separate DM test is run for each of the 24 hours.
+
+\begin{center}
+\fontsize{7.8}{9.0}\selectfont
+\begin{tabular}{p{0.38\textwidth}rrrrc}
+\toprule
+Challenger & $N$ & Mean $\Delta$ loss & DM stat & $p$-value & Significant\\
+\multicolumn{6}{l}{\textit{Panel A: Pooled hourly (\(H_1\): challenger loss \(<\) official loss)}}\\
+\midrule
+FPCA VAR(1,7) scores         & 26{,}304 &  229.1 &  22.9 & 1.00 & no\\
+FPCA VAR(1,7) + ramp/cal.    & 26{,}304 &   24.9 &   2.6 & 1.00 & no\\
+FPCA VAR(1,7) + holiday/load & 26{,}304 & \(-212.9\) & \(-24.9\) & \(< 0.001\) & \textbf{1\%}\\
+FPCA VAR(1,7) + hol./load/deriv. & 26{,}304 & \(-233.1\) & \(-27.4\) & \(< 0.001\) & \textbf{1\%}\\
+Base + residual step         & 26{,}304 & \(-560.6\) & \(-71.2\) & \(< 0.001\) & \textbf{1\%}\\
+\midrule
+\multicolumn{6}{l}{\textit{Panel B: Daily aggregated (\(N = 1{,}096\) days)}}\\
+\midrule
+FPCA VAR(1,7) scores         & 1{,}096 &  229.1 &   6.6 & 1.00 & no\\
+FPCA VAR(1,7) + ramp/cal.    & 1{,}096 &   24.9 &   0.8 & 0.77 & no\\
+FPCA VAR(1,7) + holiday/load & 1{,}096 & \(-212.9\) & \(-7.2\) & \(< 0.001\) & \textbf{1\%}\\
+FPCA VAR(1,7) + hol./load/deriv. & 1{,}096 & \(-233.1\) & \(-7.9\) & \(< 0.001\) & \textbf{1\%}\\
+Base + residual step         & 1{,}096 & \(-560.6\) & \(-18.8\) & \(< 0.001\) & \textbf{1\%}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\fontsize{9.2}{10.8}\selectfont
+
+\noindent The main model (holiday/load/derivative) is significant at the 1\% level in both the pooled and daily-aggregated formats. Hour-by-hour DM tests show the model achieves lower mean absolute error in 19 of 24 hours and significantly so (5\%) in 18 of 24 hours. The residual-step extension achieves significance in all 24 hours and wins all 24 hours on raw MAE.
+
+Pairwise DM tests confirm that the residual-step model significantly outperforms every other challenger (DM statistics range from \(-69\) to \(-106\), all \(p \approx 0\)).
+
+The simpler specifications do not pass the significance threshold. The VAR(1,7) scores model is outperformed by the official forecast (positive mean loss difference). The ramp/calendar model narrows the gap but does not achieve significance. Statistical gains appear only once holiday and load-shape predictors are included.
+
+\section*{Eigenfunction stability}
+
+The rolling-origin design re-fits the FPCA basis each period, which raises the question of whether the eigenfunctions vary materially across the evaluation window. Two checks are reported.
+
+\paragraph{Rolling-origin variance proportions.}  The variance proportions recorded at each rolling step are stable: FPC1 ranges across \([92.4\%, 93.2\%]\) and FPC2 across \([3.9\%, 4.7\%]\) over the test period, confirming that the basis chosen ex ante (\(K = 2\), cumulative variance 97.3\%) remains representative throughout.
+
+\paragraph{Sub-period eigenfunction comparison.}  FPCA is fitted separately on three overlapping sub-samples (2019--2021, 2020--2022, 2022--2024). Pairwise discrete inner products between unit-norm eigenfunctions are reported below.
+
+\begin{center}
+\fontsize{8.2}{9.5}\selectfont
+\begin{tabular}{lcc}
+\toprule
+Sub-period pair & FPC 1 & FPC 2\\
+\midrule
+2019--2021 vs.\ 2020--2022 & 0.9999 & 0.9998\\
+2019--2021 vs.\ 2022--2024 & 0.9960 & 0.9929\\
+2020--2022 vs.\ 2022--2024 & 0.9965 & 0.9927\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\fontsize{9.2}{10.8}\selectfont
+
+\noindent All pairwise inner products exceed 0.993, indicating that the eigenfunctions are virtually identical across decades and across structural changes in Turkish electricity demand (post-2021 demand growth, the 2023 earthquake period). This stability supports two modelling choices: the use of a fixed \(K = 2\) throughout the rolling estimation, and the use of a fixed FPCA basis in the planned random forest benchmark (script 16b), which avoids \(1{,}096\) expensive FPCA re-fits.
+
+\section*{Structure of the official forecast's errors}
+
+A key claim of the FDA approach is that the official forecast leaves behind exploitable curve-shape structure in its residuals. This section provides direct evidence for that claim.
+
+\paragraph{Projection onto load FPCs.}  For each test day \(d\), the error curve \(\widehat e_d(h) = Y_d(h) - \widehat Y^{off}_d(h)\) is projected onto the load eigenfunctions,
+\[
+\tilde\xi_{dk}^{off} = \sum_{h=0}^{23}\widehat e_d(h)\,\phi_k(h).
+\]
+If the official forecast does not systematically miss a particular shape mode, these projections should have zero mean. Table~\ref{tab:score_tests} reports one-sample \(t\)-tests for the mean projection score.
+
+\begin{table}[h]
+\centering
+\fontsize{8.2}{9.5}\selectfont
+\caption{Mean error-curve projections onto load FPCs (test for \(H_0\): mean \(= 0\)).}
+\label{tab:score_tests}
+\begin{tabular}{llrrrr}
+\toprule
+Model & FPC & Mean score & Std.\ dev. & $t$-stat & $p$-value\\
+\midrule
+Official forecast & PC 1 & 2168.9 & 7121.1 & 10.08 & \(< 0.001\)\\
+Official forecast & PC 2 &  792.3 & 2756.7 &  9.51 & \(< 0.001\)\\
+\midrule
+FDA model         & PC 1 &  413.3 & 4098.8 &  3.34 & \(< 0.001\)\\
+FDA model         & PC 2 & \(-103.4\) & 1111.8 & \(-3.08\) & 0.002\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent The official forecast has large, highly significant non-zero projections on both load components: its residuals systematically depart from the actual load curve in the direction of the dominant intraday shape modes. The FDA model's projections are smaller by a factor of 5 on PC1 and 8 on PC2, and statistically significant at weaker levels. Some residual bias remains and provides a direction for future refinement.
+
+\paragraph{Variance explained and effective rank.}  As a complementary summary, the fraction of total error variance explained by the projection onto the two load FPCs, and the effective rank of the error covariance matrix, are computed for both models.
+
+\begin{center}
+\fontsize{8.2}{9.5}\selectfont
+\begin{tabular}{lcc}
+\toprule
+Model & Var.\ explained by FPCs 1--2 & Effective rank\\
+\midrule
+Official forecast & 83.7\% & 2.70\\
+FDA model         & 42.6\% & 4.82\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\fontsize{9.2}{10.8}\selectfont
+
+\noindent The official forecast errors are concentrated almost entirely in two shape dimensions (effective rank 2.70 out of 24), meaning the official forecast consistently makes the wrong type of shape error, one that is well aligned with the principal modes of load variation. Once the FDA model corrects for these systematic shape biases, the remaining errors are more diffuse (effective rank 4.82), suggesting the FDA model has extracted most of the exploitable curve structure. Reducing the effective rank further would require capturing higher-order shape variation, for example through additional FPCA components (\(K = 4\)) or nonlinear score regression.
+
+\section*{Autocorrelation diagnostics}
+
+Ljung--Box tests (lag 14) are applied to the hourly forecast error series for all 24 hours under both the FDA model and the official forecast. Both models reject the null of no autocorrelation at all 24 hours (\(p \approx 0\)), indicating that both leave serial structure in their errors.
+
+The pattern of autocorrelation differs by time of day. During business hours (9--16), the official forecast has substantially larger Ljung--Box statistics than the FDA model (e.g., hour 14: 1708 vs.\ 429), consistent with the official forecast missing the systematic level and shape dynamics that the VAR(1,7) score model captures. During overnight and evening transition hours (17--23 and 0--8), the FDA model's Ljung--Box statistics are larger. These are the hours with the strongest morning ramp and evening drop, suggesting that the VAR(1,7) structure is adequate for within-business-hour dynamics but leaves non-linear or high-frequency pattern in transition hours.
+
+The VAR(1,7) score residuals also reject the Ljung--Box null (Score 1: \(Q_{14} = 503.9\); Score 2: \(Q_{14} = 553.2\), both \(p \approx 0\)), confirming that residual serial structure in the score process has not been fully removed. This motivates either higher-order lag specifications or a nonlinear score model.
+
+\section*{Planned extension: random forest score regression}
+
+Script 16b implements a random forest benchmark for the FPCA score regression, using a fixed FPCA basis (justified by the eigenfunction stability results above) and the same feature matrix as the main OLS specification. The fixed-basis design reduces computation by approximately an order of magnitude relative to re-fitting FPCA at each rolling step. The RF replaces the linear OLS estimator on the same predictors. If the RF matches or underperforms the OLS, the linear specification is adequate for the predictor set used. If RF improves materially, the linear model is leaving nonlinear structure unexploited.
+
+Results are not yet available. Once the rolling loop completes, the RF will be compared to the OLS baseline using MAE, RMSE, and Diebold--Mariano tests.
+
+\section*{Conclusion and next steps}
+
+The main findings from this reporting period are as follows. The forecast improvements from the primary specification are statistically significant at the 1\% level against the official day-ahead forecast, both on the full hourly panel and on the daily-aggregated series. The FPCA basis is empirically stable across sub-periods, supporting the fixed-basis approximation used in the planned RF benchmark. The official forecast systematically errs in the direction of the dominant load shape modes, and the FDA model reduces these shape biases, leaving more diffuse residuals. Remaining serial structure in both score residuals and hourly forecast errors suggests that the current VAR(1,7) linear specification has not exhausted the predictable component of the forecast error.
+
+Pending work: (i) RF benchmark results (script 16b); (ii) a decision on whether to retain the residual-step extension as a thesis contribution or treat it as a descriptive robustness check; and (iii) connecting the intraday structure of remaining errors to the economic interpretation of the load curve.
+
+\begin{thebibliography}{99}
+
+\bibitem[Diebold and Mariano(1995)]{diebold_mariano_1995}
+Diebold, F. X. and Mariano, R. S. (1995).
+Comparing predictive accuracy.
+\textit{Journal of Business \& Economic Statistics}, 13(3), 253--263.
+\href{https://doi.org/10.1080/07350015.1995.10524599}{doi:10.1080/07350015.1995.10524599}.
+
+\bibitem[Harvey, Leybourne and Newbold(1997)]{harvey_etal_1997}
+Harvey, D., Leybourne, S. and Newbold, P. (1997).
+Testing the equality of prediction mean squared errors.
+\textit{International Journal of Forecasting}, 13(2), 281--291.
+\href{https://doi.org/10.1016/S0169-2070(96)00719-4}{doi:10.1016/S0169-2070(96)00719-4}.
+
+\bibitem[Xie and Hong(2016)]{xie_hong_2016}
+Xie, J. and Hong, T. (2016).
+GEFCom2014 probabilistic electric load forecasting: An integrated solution with
+forecast combination and residual simulation.
+\textit{International Journal of Forecasting}, 32(3), 1012--1016.
+\href{https://doi.org/10.1016/j.ijforecast.2015.11.005}{doi:10.1016/j.ijforecast.2015.11.005}.
+
+\bibitem[Kokoszka and Reimherr(2017)]{kokoszka_reimherr_2017}
+Kokoszka, P. and Reimherr, M. (2017).
+\textit{Introduction to Functional Data Analysis}.
+CRC Press.
+
+\end{thebibliography}
+
+\end{document}
