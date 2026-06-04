@@ -259,17 +259,6 @@ Our rolling-origin estimator automatically incorporates the most
 recent data at each step, which is why our 2024 bias is only 34 MWh
 while the official is 585 MWh.
 
-\textbf{Ramadan and religious holiday complexity.}
-Ramadan shifts the entire daily demand pattern: iftar (breaking fast
-at sunset) creates a massive spike at what would otherwise be a
-declining evening demand, and the overnight hours see much higher
-consumption as people are awake eating, socialising, and praying.
-The timing of Ramadan shifts by roughly 10--11 days per year
-relative to the Gregorian calendar. An official model that does not
-correctly track Ramadan will generate systematic errors that
-persist for the entire month. Our model includes explicit Ramadan
-and Bayram indicators constructed year by year.
-
 \textbf{Generator strategic behavior.}
 Beyond the TSO, generators themselves have incentives to shade
 their demand forecasts when submitting market bids. If a generator
@@ -286,11 +275,10 @@ forecast act as a focal point rather than an accurate estimate.
 \textbf{For the thesis presentation:} when an audience member asks
 ``why does the official forecast underpredict?'', the honest answer
 is: we do not know for certain, but the data is consistent with
-(a) model staleness in a period of growing demand, (b) asymmetric
-institutional loss functions favouring under-procurement, and (c)
-the official model not fully capturing Ramadan dynamics. The growing
-gap in 2024 is most naturally explained by the model not adapting
-to a structural demand increase compounded by an unusually hot summer.
+(a) model staleness in a period of growing demand, and (b) asymmetric
+institutional loss functions favouring under-procurement.
+The growing gap in 2024 is most naturally explained by the model not
+adapting to a structural demand increase compounded by an unusually hot summer.
 \end{intuitionbox}
 
 % ============================================================
@@ -313,7 +301,6 @@ The shape itself is economically meaningful. Two days can have the same
 \emph{average} consumption but very different \emph{shapes}: one might
 have a sharp morning peak while another has a flat profile. An air
 conditioning shock raises the afternoon level but not the overnight level.
-A Ramadan period flattens the morning ramp and shifts demand to night.
 
 \textbf{Functional Data Analysis (FDA)} is the branch of statistics that
 treats each day's 24-hour sequence as a single mathematical object --- a
@@ -453,7 +440,7 @@ same regressors appear in each equation.
 
 The VAR alone explains the \emph{dynamics} of scores but ignores
 known structure: weekends have different demand than weekdays,
-public holidays cause sharp drops, Ramadan shifts demand to night,
+public holidays cause sharp drops,
 summer school breaks change the daytime pattern.
 
 We add a vector $z_d$ of predetermined features:
@@ -710,8 +697,8 @@ even the best model leaves strongly autocorrelated errors.
 Look at the distribution across hours. Hour 6 has LB = 7,227.
 This is the morning ramp start. The model systematically
 over-forecasts or under-forecasts the ramp timing for consecutive
-days --- during Ramadan the ramp shifts to a different pattern and
-persists for weeks; during summer the ramp is shallower and this
+days --- during holiday periods the ramp shifts to a different pattern and
+persists for days; during summer the ramp is shallower and this
 also persists. These regime patterns create serial dependence in
 errors that cannot be removed by lagged features alone.
 \end{intuitionbox}
@@ -799,7 +786,47 @@ intact. The RF is a drop-in replacement for OLS, not an alternative to FPCA.
     does not invalidate the current results.
 \end{itemize}
 
-[Results to be added after the RF computation completes.]
+\subsection{Results}
+
+\textbf{FPCA-RF vs FPCA-OLS (full 2023--2025 evaluation).}
+Using the same feature vector $z_d$ plus lagged scores as inputs to a
+random forest (one RF model per FPCA score, same rolling-origin design,
+FPCA basis fixed on the expanding training window):
+
+\begin{center}
+\begin{tabular}{lrrrrr}
+\toprule
+Model & MAE & MAPE & MAE gain & Conclusion \\
+\midrule
+Official forecast & 1214 & 3.15\% & 0\% & benchmark \\
+FPCA-RF (fixed basis) & 1217 & 3.14\% & $-0.3\%$ & ties official \\
+FPCA-OLS (main model) & \textbf{980} & \textbf{2.56\%} & $+19.2\%$ & best \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The outcome is the first case: \textbf{FPCA-OLS substantially outperforms FPCA-RF}.
+RF achieves essentially the same accuracy as the official forecast (MAE 1217 vs 1214)
+while OLS beats the official by 19\%. RF finds no meaningful nonlinearity to exploit:
+the linear score equation is adequate, and the VAR structure plus linear feature
+mapping is actually beneficial as a regulariser.
+
+\begin{resultbox}
+\textbf{Conclusion:} The FPCA scores are approximately linearly predictable from the
+features. OLS's linear structure reduces variance without sacrificing fit; RF's
+additional flexibility adds variance without a compensating reduction in bias.
+This validates the linear score regression and the FDA/VAR model architecture.
+\end{resultbox}
+
+\textbf{Direct RF as an additional exercise (2025 subsample only).}
+A ``direct RF'' model that skips the FPCA structure entirely and predicts each of the
+24 hourly values directly (using the same features plus lagged hourly values) achieves
+MAE = 718 on the 2025 subsample, a 31.8\% gain over the official (MAE 1052) in that
+year, compared to FPCA-OLS's 13.5\% gain (MAE 910) in the same period.
+A direct ML approach can therefore be competitive, but the comparison is on a single
+year and does not use the functional structure. The FPCA model's 19.2\% gain over the
+full three-year period --- with interpretable eigenfunctions, a testable stability
+condition, and a clear decomposition of the forecast --- remains the primary result.
 
 % ============================================================
 \section{The Coherent Narrative}
@@ -832,8 +859,9 @@ Here is the full story in one flow:
     residual step exploits this predictable pattern and achieves 46\%
     MAE gain --- winning at all 24 of 24 hours.
 
-  \item \textbf{The benchmark:} random forest on the same features tests
-    whether OLS leaves nonlinearity on the table. [Result pending.]
+  \item \textbf{The benchmark:} FPCA-RF (fixed basis) achieves MAE = 1217,
+    essentially tying the official forecast, while FPCA-OLS achieves MAE = 980.
+    The linear score equation is adequate; RF finds no nonlinearity to exploit.
 
   \item \textbf{Statistical validity:} rolling-origin evaluation ensures
     no leakage. DM tests confirm the gains are statistically significant.
