@@ -8,6 +8,7 @@
 
 \usepackage{booktabs}
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning}
@@ -37,7 +38,149 @@
 \end{frame}
 
 % ============================================================
-% SLIDE 2: THE OBJECT: A CURVE, NOT 24 NUMBERS
+% SLIDE 2: TURKISH ELECTRICITY MARKET
+% ============================================================
+\begin{frame}{Turkish electricity market: actors and daily operation}
+  \small
+  \vspace{-0.3em}
+  \[
+    \text{Bilateral contracts}
+    \;\rightarrow\;
+    \text{DAM}
+    \;\rightarrow\;
+    \text{IDM}
+    \;\rightarrow\;
+    \text{BPM}
+    \;\rightarrow\;
+    \text{Settlement}
+  \]
+  \vspace{-0.5em}
+  \begin{columns}
+    \begin{column}{0.40\textwidth}
+      \textbf{Key actors}
+      \begin{itemize}\small
+        \item \textbf{TEİAŞ} --- TSO; maintains real-time system balance
+        \item \textbf{EPİAŞ} --- market operator; runs DAM and IDM; performs settlement
+        \item \textbf{Generators} --- submit supply offers
+        \item \textbf{Suppliers/traders} --- buy electricity, serve consumers
+        \item \textbf{Distribution cos.} --- regulated local networks
+        \item \textbf{Consumers} --- households, firms, eligible consumers
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \begin{tabular}{@{}lp{0.66\textwidth}@{}}
+        \toprule
+        \textbf{DAM} \textit{\scriptsize($D-1$)}
+          & Hourly supply and demand cleared by EPİAŞ
+            $\Rightarrow$ \textbf{MCP} \\[0.35em]
+        \textbf{IDM} \textit{\scriptsize(after DAM)}
+          & Participants revise positions as wind/solar or demand shifts \\[0.35em]
+        \textbf{BPM} \textit{\scriptsize(real time)}
+          & TEİAŞ activates balancing bids to keep system in balance
+            $\Rightarrow$ \textbf{SMP} \\[0.35em]
+        \textbf{Settlement}
+          & EPİAŞ compares scheduled and metered quantities;
+            deviations settled financially \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+% SLIDE 3: WHY BETTER FORECASTING HAS A DIRECT FINANCIAL COST
+% ============================================================
+\begin{frame}{Financial motivation to improve the official load forecast}
+  \small
+  $e_t = L_t - \widehat{L}_t^{\,\mathrm{off}}$
+  \quad ($e_t>0$: underprediction, system short;\;
+         $e_t<0$: overprediction, system long).
+  \vspace{0.3em}
+  \begin{columns}
+    \begin{column}{0.52\textwidth}
+      Stylised imbalance cost:
+      \[
+        \Delta C_t \approx (\mathrm{SMP}_t - \mathrm{MCP}_t)\,e_t
+      \]
+      SMP is not always above MCP. The issue is that SMP is
+      \textbf{volatile}: set in real time under scarcity or surplus,
+      it can diverge substantially from MCP.
+
+      \vspace{0.4em}
+      Larger forecast errors $\Rightarrow$ greater exposure to an
+      unfavourable $(\mathrm{SMP}-\mathrm{MCP})$ spread.
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \[
+        \text{better forecast}
+        \;\Rightarrow\;
+        \text{smaller imbalance}
+      \]
+      \[
+        \Rightarrow\;
+        \text{less BPM exposure}
+        \;\Rightarrow\;
+        \text{lower expected cost}
+      \]
+      \vspace{0.4em}
+      \footnotesize
+      Benchmark: TEİAŞ's official day-ahead load forecast
+      (\textit{Yük Tahmin Plan\i}), available on the
+      EPİAŞ Transparency Platform.
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \begin{block}{}
+    \centering
+    Forecasting demand accurately reduces the amount of electricity
+    that must be corrected unexpectedly in real time.
+  \end{block}
+\end{frame}
+
+% ============================================================
+% SLIDE 4: THE PROBLEM AND THE STAKES
+% ============================================================
+\begin{frame}{The problem: official forecast persistently underpredicts}
+  \begin{columns}
+    \begin{column}{0.42\textwidth}
+      \small
+      \begin{tabular}{lrr}
+        \toprule
+        Year & Official bias & Our bias \\
+             & (MWh/hr) & (MWh/hr) \\
+        \midrule
+        2023 & $+344$ & $+176$ \\
+        2024 & $+585$ & $+34$  \\
+        2025 & $+472$ & $+98$  \\
+        \midrule
+        \textbf{Avg} & $\mathbf{+467}$ & $\mathbf{+103}$ \\
+        \bottomrule
+      \end{tabular}\\[0.4em]
+      Positive = actual $>$ forecast (underprediction).
+    \end{column}
+    \begin{column}{0.55\textwidth}
+      \textbf{Why does the official underpredict?}\\[0.4em]
+      \small
+      \begin{itemize}
+        \item \textbf{Asymmetric loss:} over-procurement is
+              politically and contractually more costly than
+              under-procurement --- optimal forecast under
+              asymmetric loss sits below the conditional mean.
+        \item \textbf{Model staleness:} official models update
+              infrequently; structural demand growth driven by
+              industrialisation outpaces
+              recalibration.
+        \item \textbf{Strategic feedback:} the official forecast
+              acts as a coordination device for generators; this
+              can turn it into a focal point rather than an
+              accurate estimate.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+% SLIDE 5: THE OBJECT: A CURVE, NOT 24 NUMBERS
 % ============================================================
 \begin{frame}{The object: a curve, not 24 numbers}
   \begin{columns}
@@ -58,48 +201,6 @@
               at every hour
         \item \textbf{Goal:} forecast tomorrow's
               full profile $Y_{d+1}(\cdot)$
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-% ============================================================
-% SLIDE 3: THE PROBLEM AND THE STAKES
-% ============================================================
-\begin{frame}{The problem and the stakes}
-  \begin{columns}
-    \begin{column}{0.45\textwidth}
-      \small
-      \begin{tabular}{lrr}
-        \toprule
-        Year & Official bias & Our bias \\
-             & (MWh/hr) & (MWh/hr) \\
-        \midrule
-        2023 & $+344$ & $+176$ \\
-        2024 & $+585$ & $+34$  \\
-        2025 & $+472$ & $+98$  \\
-        \midrule
-        \textbf{Avg} & $\mathbf{+467}$ & $\mathbf{+103}$ \\
-        \bottomrule
-      \end{tabular}\\[0.4em]
-      \small Positive = actual $>$ forecast (underprediction).\\[0.5em]
-      \textbf{Users affected:}
-      \begin{itemize}\small
-        \item TEİAŞ --- unit commitment, reserves
-        \item Generators --- day-ahead bids
-        \item Large consumers --- imbalance penalties
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.52\textwidth}
-      \textbf{Why does the official underpredict?}\\[0.3em]
-      \small The mechanism is \emph{left open}.
-      Candidate explanations (tentative speculation only):
-      \begin{itemize}
-        \item \textbf{Model update lags:} structural demand growth
-              outpaces recalibration.
-              The 2024 row ($+585$ MWh) is consistent.
-        \item \textbf{Growing demand:} persistent trend the
-              official model may be slow to incorporate.
       \end{itemize}
     \end{column}
   \end{columns}
