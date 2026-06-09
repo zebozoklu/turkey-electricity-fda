@@ -92,55 +92,52 @@
 % ============================================================
 \begin{frame}{Financial motivation to improve the official load forecast}
   \small
-  $e_t = L_t - \widehat{L}_t^{\,\mathrm{off}}$
-  \quad ($e_t>0$: underprediction, system short;\;
-         $e_t<0$: overprediction, system long).
-  \vspace{0.3em}
+  \[
+    e_t = L_t - \widehat{L}_t^{\,\mathrm{off}}
+  \]
+  \vspace{-0.5em}
+  \[
+    \underbrace{|e_t|}_{\text{imbalance volume}}
+    \;\times\;
+    \underbrace{|\mathrm{SMP}_t - \mathrm{MCP}_t|}_{\text{price spread}}
+    \;\approx\;
+    \text{balancing-market exposure}
+  \]
+  \vspace{-0.3em}
+  \[
+    \text{Better forecast}
+    \;\Longrightarrow\;
+    \text{smaller imbalance}
+    \;\Longrightarrow\;
+    \text{less corrected in real time}
+    \;\Longrightarrow\;
+    \text{lower expected cost}
+  \]
+  \vspace{0.2em}
   \begin{columns}
-    \begin{column}{0.52\textwidth}
-      Stylised imbalance cost:
-      \[
-        \Delta C_t \approx (\mathrm{SMP}_t - \mathrm{MCP}_t)\,e_t
-      \]
-      SMP is not always above MCP. The issue is that SMP is
-      \textbf{volatile}: set in real time under scarcity or surplus,
-      it can diverge substantially from MCP.
-
-      \vspace{0.4em}
-      Larger forecast errors $\Rightarrow$ greater exposure to an
-      unfavourable $(\mathrm{SMP}-\mathrm{MCP})$ spread.
+    \begin{column}{0.60\textwidth}
+      \small
+      SMP is determined in real time under scarcity or surplus
+      and is typically more volatile than the day-ahead MCP.
+      Forecast errors therefore expose the system to an uncertain
+      and potentially costly price spread.
     \end{column}
-    \begin{column}{0.45\textwidth}
-      \[
-        \text{better forecast}
-        \;\Rightarrow\;
-        \text{smaller imbalance}
-      \]
-      \[
-        \Rightarrow\;
-        \text{less BPM exposure}
-        \;\Rightarrow\;
-        \text{lower expected cost}
-      \]
-      \vspace{0.4em}
-      \footnotesize
-      Benchmark: TEİAŞ's official day-ahead load forecast
-      (\textit{Yük Tahmin Plan\i}), available on the
-      EPİAŞ Transparency Platform.
+    \begin{column}{0.37\textwidth}
+      \begin{block}{}
+        \centering\small
+        \textbf{Benchmark:} TEİAŞ official
+        day-ahead load forecast\\[0.2em]
+        \footnotesize\textit{Yük Tahmin Plan\i}\\
+        EPİAŞ Transparency Platform
+      \end{block}
     \end{column}
   \end{columns}
-  \vspace{0.3em}
-  \begin{block}{}
-    \centering
-    Forecasting demand accurately reduces the amount of electricity
-    that must be corrected unexpectedly in real time.
-  \end{block}
 \end{frame}
 
 % ============================================================
 % SLIDE 4: THE PROBLEM AND THE STAKES
 % ============================================================
-\begin{frame}{The problem: official forecast persistently underpredicts}
+\begin{frame}{Another note: official forecast persistently underpredicts}
   \begin{columns}
     \begin{column}{0.42\textwidth}
       \small
@@ -179,32 +176,6 @@
   \end{columns}
 \end{frame}
 
-% ============================================================
-% SLIDE 5: THE OBJECT: A CURVE, NOT 24 NUMBERS
-% ============================================================
-\begin{frame}{The object: a curve, not 24 numbers}
-  \begin{columns}
-    \begin{column}{0.62\textwidth}
-      \includegraphics[width=\linewidth]{../output/figs/fda_mean_actual_forecast_all.png}
-    \end{column}
-    \begin{column}{0.35\textwidth}
-      \Large $Y_d(h),\quad h=0,\ldots,23$
-      \vspace{0.6em}
-
-      \normalsize
-      \begin{itemize}
-        \item One coherent daily trajectory
-        \item Ramp, plateau, and evening peak are
-              \emph{features of the whole curve},
-              not isolated hours
-        \item Official (dashed) sits below actual
-              at every hour
-        \item \textbf{Goal:} forecast tomorrow's
-              full profile $Y_{d+1}(\cdot)$
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\end{frame}
 
 % ============================================================
 % SLIDE 4: RESEARCH QUESTION
@@ -235,6 +206,35 @@
   demand has been located.
   FDA framework: \citep{ramsay_2005, kokoszka_2017, hyndman_2007}.}
 \end{frame}
+
+
+% ============================================================
+% SLIDE 5: THE OBJECT: A CURVE, NOT 24 NUMBERS
+% ============================================================
+\begin{frame}{The object: a curve, not 24 numbers}
+  \begin{columns}
+    \begin{column}{0.62\textwidth}
+      \includegraphics[width=\linewidth]{../output/figs/fda_mean_actual_forecast_all.png}
+    \end{column}
+    \begin{column}{0.35\textwidth}
+      \Large $Y_d(h),\quad h=0,\ldots,23$
+      \vspace{0.6em}
+
+      \normalsize
+      \begin{itemize}
+        \item One coherent daily trajectory
+        \item Ramp, plateau, and evening peak are
+              \emph{features of the whole curve},
+              not isolated hours
+        \item Official (dashed) sits below actual
+              at every hour
+        \item \textbf{Goal:} forecast tomorrow's
+              full profile $Y_{d+1}(\cdot)$
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
 
 % ============================================================
 % SLIDE 5: METHOD: THE PIPELINE
