@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.6.23)  5 JUN 2026 03:07
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.6.23)  9 JUN 2026 09:02
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -1050,26 +1050,26 @@ thkerncmss.
 
  <../output/figs/fda_mean_actual_forecast_all.png>]
 LaTeX Font Info:    Font shape `OT1/cmss/b/n' in size <9> not available
-(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 110.
+(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 106.
 
 LaTeX Font Info:    Font shape `OT1/cmss/b/n' in size <6> not available
-(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 110.
+(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 106.
 
 LaTeX Font Info:    Font shape `OT1/cmss/b/n' in size <5> not available
-(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 110.
+(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 106.
 
 LaTeX Font Info:    Font shape `OT1/cmss/b/n' in size <10> not available
-(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 110.
+(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 106.
 
 LaTeX Font Info:    Font shape `OT1/cmss/b/n' in size <7> not available
-(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 110.
+(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 106.
 
  [3
 
 ] [4
 
 ]
-Underfull \hbox (badness 10000) in paragraph at lines 208--208
+Underfull \hbox (badness 10000) in paragraph at lines 204--204
 []|\OT1/cmss/m/n/9 Morning/evening ramp
  []
 
@@ -1082,13 +1082,13 @@ File: ../output/figs/eigenfunction_shape_comparison.png Graphic file (type png)
 
 <use ../output/figs/eigenfunction_shape_comparison.png>
 Package pdftex.def Info: ../output/figs/eigenfunction_shape_comparison.png  use
-d on input line 248.
+d on input line 245.
 (pdftex.def)             Requested size: 261.14908pt x 195.86162pt.
  [6
 
  <../output/figs/eigenfunction_shape_comparison.png>]
 LaTeX Font Info:    Font shape `OT1/cmss/b/n' in size <8> not available
-(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 284.
+(Font)              Font shape `OT1/cmss/bx/n' tried instead on input line 281.
 
  [7
 
@@ -1099,13 +1099,13 @@ File: ../output/figs/fpca_VAR_1_7_gain_vs_official_by_hour.png Graphic file (ty
 pe png)
 <use ../output/figs/fpca_VAR_1_7_gain_vs_official_by_hour.png>
 Package pdftex.def Info: ../output/figs/fpca_VAR_1_7_gain_vs_official_by_hour.p
-ng  used on input line 313.
+ng  used on input line 310.
 (pdftex.def)             Requested size: 208.91528pt x 125.34825pt.
 <../output/figs/acf_base_vs_correction.png, id=94, 722.7pt x 433.62pt>
 File: ../output/figs/acf_base_vs_correction.png Graphic file (type png)
 <use ../output/figs/acf_base_vs_correction.png>
 Package pdftex.def Info: ../output/figs/acf_base_vs_correction.png  used on inp
-ut line 313.
+ut line 310.
 (pdftex.def)             Requested size: 213.27197pt x 127.9631pt.
  [8
 
@@ -1117,7 +1117,7 @@ File: ../output/figs/direct_RF_mae_by_hour_load_only.png Graphic file (type png
 )
 <use ../output/figs/direct_RF_mae_by_hour_load_only.png>
 Package pdftex.def Info: ../output/figs/direct_RF_mae_by_hour_load_only.png  us
-ed on input line 353.
+ed on input line 350.
 (pdftex.def)             Requested size: 239.38554pt x 132.99164pt.
  [9
 
@@ -1126,7 +1126,7 @@ ed on input line 353.
 ]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\translate ' on input line 419.
+(hyperref)                removing `\translate ' on input line 416.
 
 [11
 
@@ -1147,7 +1147,7 @@ Package rerunfilecheck Info: File `thesis_proposal_v7.out' has not changed.
 Here is how much of TeX's memory you used:
  26014 strings out of 476025
  525817 string characters out of 5790017
- 1871388 words of memory out of 5000000
+ 1870388 words of memory out of 5000000
  45894 multiletter control sequences out of 15000+600000
  527009 words of font info for 84 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
@@ -1170,7 +1170,7 @@ al/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/loca
 l/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/
 texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/te
 xlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb>
-Output written on thesis_proposal_v7.pdf (11 pages, 755799 bytes).
+Output written on thesis_proposal_v7.pdf (11 pages, 757191 bytes).
 PDF statistics:
  208 PDF objects out of 1000 (max. 8388607)
  142 compressed objects within 2 object streams
